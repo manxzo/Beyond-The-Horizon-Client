@@ -1,7 +1,7 @@
-import { Button } from "@heroui/button";
-import { Kbd } from "@heroui/kbd";
-import { Link } from "@heroui/link";
-import { Input } from "@heroui/input";
+import { Button } from "@heroui/react";
+import { Kbd } from "@heroui/react";
+import { Link } from "@heroui/react";
+import { Input } from "@heroui/react";
 import {
   Navbar as HeroUINavbar,
   NavbarBrand,
@@ -20,12 +20,17 @@ import {
   TwitterIcon,
   GithubIcon,
   DiscordIcon,
-  HeartFilledIcon,
   SearchIcon,
 } from "@/components/icons";
 import { Logo } from "@/components/icons";
+import { useUser } from "@/hooks/useUser";
 
 export const Navbar = () => {
+  const { currentUser, isAuthenticated, logout } = useUser();
+
+  // Check if user has admin role
+  const isAdmin = currentUser?.role === "Admin";
+
   const searchInput = (
     <Input
       aria-label="Search"
@@ -57,10 +62,11 @@ export const Navbar = () => {
             href="/"
           >
             <Logo />
-            <p className="font-bold text-inherit">ACME</p>
+            <p className="font-bold text-inherit">{siteConfig.name}</p>
           </Link>
         </NavbarBrand>
         <div className="hidden lg:flex gap-4 justify-start ml-2">
+          {/* Public navigation items */}
           {siteConfig.navItems.map((item) => (
             <NavbarItem key={item.href}>
               <Link
@@ -75,6 +81,38 @@ export const Navbar = () => {
               </Link>
             </NavbarItem>
           ))}
+
+          {/* User-specific navigation items (only shown when authenticated) */}
+          {isAuthenticated && siteConfig.userNavItems.slice(0, 4).map((item) => (
+            <NavbarItem key={item.href}>
+              <Link
+                className={clsx(
+                  linkStyles({ color: "foreground" }),
+                  "data-[active=true]:text-primary data-[active=true]:font-medium"
+                )}
+                color="foreground"
+                href={item.href}
+              >
+                {item.label}
+              </Link>
+            </NavbarItem>
+          ))}
+
+          {/* Admin-specific navigation items (only shown for admins) */}
+          {isAdmin && (
+            <NavbarItem key="admin">
+              <Link
+                className={clsx(
+                  linkStyles({ color: "foreground" }),
+                  "data-[active=true]:text-primary data-[active=true]:font-medium"
+                )}
+                color="foreground"
+                href="/admin"
+              >
+                Admin
+              </Link>
+            </NavbarItem>
+          )}
         </div>
       </NavbarContent>
 
@@ -94,18 +132,41 @@ export const Navbar = () => {
           </Link>
           <ThemeSwitch />
         </NavbarItem>
-        <NavbarItem className="hidden lg:flex">{searchInput}</NavbarItem>
+        {isAuthenticated && (
+          <NavbarItem className="hidden lg:flex">{searchInput}</NavbarItem>
+        )}
         <NavbarItem className="hidden md:flex">
-          <Button
-            isExternal
-            as={Link}
-            className="text-sm font-normal text-default-600 bg-default-100"
-            href={siteConfig.links.sponsor}
-            startContent={<HeartFilledIcon className="text-danger" />}
-            variant="flat"
-          >
-            Sponsor
-          </Button>
+          {isAuthenticated ? (
+            <div className="flex gap-3 items-center">
+              <Link href="/profile" className="flex items-center gap-2">
+                <img
+                  src={currentUser?.avatar_url || "https://ui-avatars.com/api/?name=User&background=random"}
+                  alt="User Avatar"
+                  className="w-8 h-8 rounded-full"
+                />
+                <span>{currentUser?.username}</span>
+              </Link>
+              <Button
+                color="danger"
+                variant="flat"
+                size="sm"
+                onPress={() => logout()}
+              >
+                Logout
+              </Button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Button
+                as={Link}
+                href={siteConfig.authLinks.login}
+                variant="flat"
+                color="default"
+              >
+                Login/Signup
+              </Button>
+            </div>
+          )}
         </NavbarItem>
       </NavbarContent>
 
@@ -118,25 +179,86 @@ export const Navbar = () => {
       </NavbarContent>
 
       <NavbarMenu>
-        {searchInput}
+        {isAuthenticated && searchInput}
         <div className="mx-4 mt-2 flex flex-col gap-2">
-          {siteConfig.navMenuItems.map((item, index) => (
-            <NavbarMenuItem key={`${item}-${index}`}>
+          {/* Public navigation items */}
+          {siteConfig.navItems.map((item) => (
+            <NavbarMenuItem key={item.href}>
               <Link
-                color={
-                  index === 2
-                    ? "primary"
-                    : index === siteConfig.navMenuItems.length - 1
-                      ? "danger"
-                      : "foreground"
-                }
-                href="#"
+                color="foreground"
+                href={item.href}
                 size="lg"
               >
                 {item.label}
               </Link>
             </NavbarMenuItem>
           ))}
+
+          {/* User-specific navigation items */}
+          {isAuthenticated && (
+            <>
+              <NavbarMenuItem className="mt-3">
+                <span className="text-primary font-medium">User Pages</span>
+              </NavbarMenuItem>
+              {siteConfig.userNavItems.map((item) => (
+                <NavbarMenuItem key={item.href}>
+                  <Link
+                    color="foreground"
+                    href={item.href}
+                    size="lg"
+                  >
+                    {item.label}
+                  </Link>
+                </NavbarMenuItem>
+              ))}
+            </>
+          )}
+
+          {/* Admin-specific navigation items */}
+          {isAdmin && (
+            <>
+              <NavbarMenuItem className="mt-3">
+                <span className="text-primary font-medium">Admin Pages</span>
+              </NavbarMenuItem>
+              {siteConfig.adminNavItems.map((item) => (
+                <NavbarMenuItem key={item.href}>
+                  <Link
+                    color="foreground"
+                    href={item.href}
+                    size="lg"
+                  >
+                    {item.label}
+                  </Link>
+                </NavbarMenuItem>
+              ))}
+            </>
+          )}
+
+          {/* Authentication buttons */}
+          <NavbarMenuItem className="mt-3">
+            {isAuthenticated ? (
+              <Button
+                color="danger"
+                variant="flat"
+                onPress={() => logout()}
+                className="w-full"
+              >
+                Logout
+              </Button>
+            ) : (
+              <div className="flex flex-col gap-2 w-full">
+                <Button
+                  as={Link}
+                  href={siteConfig.authLinks.login}
+                  variant="flat"
+                  color="default"
+                  className="w-full"
+                >
+                  Login/Signup
+                </Button>
+              </div>
+            )}
+          </NavbarMenuItem>
         </div>
       </NavbarMenu>
     </HeroUINavbar>

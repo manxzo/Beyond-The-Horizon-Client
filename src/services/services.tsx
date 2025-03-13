@@ -61,9 +61,15 @@ export interface ApiResponse<T> {
 }
 
 // ==================== AUTH SERVICES ====================
+export interface userSignupData {
+    username: string,
+    email: string,
+    password: string,
+    dob: Date,
+}
 export const authService = {
     // POST /api/public/auth/register
-    register: async (userData: any): Promise<ApiResponse<any>> => {
+    register: async (userData: userSignupData): Promise<ApiResponse<any>> => {
         const response = await api.post("/api/public/auth/register", userData);
         return response.data;
     },
