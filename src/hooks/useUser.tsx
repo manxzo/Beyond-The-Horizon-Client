@@ -59,8 +59,7 @@ export function useUser() {
                 const response = await userService.getCurrentUser();
                 return response.data;
             } catch (error) {
-                // If the request fails due to auth issues, return null instead of throwing
-                // This helps distinguish between "not logged in" and "error fetching user"
+               console.error(error);
                 return null;
             }
         },
@@ -233,6 +232,7 @@ export function useUser() {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
             return true;
         } catch (error) {
+            console.error(error);
             return false;
         }
     };
