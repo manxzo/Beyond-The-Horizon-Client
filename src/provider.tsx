@@ -11,12 +11,12 @@ declare module "@react-types/shared" {
   }
 }
 
-// Create a client
-const queryClient = new QueryClient();
+
 
 export function Provider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
-
+  // Create a client
+  const queryClient = new QueryClient();
   return (
     <QueryClientProvider client={queryClient}>
       <HeroUIProvider navigate={navigate} useHref={useHref}>

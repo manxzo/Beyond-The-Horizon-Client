@@ -1,12 +1,24 @@
-//@ts-nocheck
-import { useState, useEffect } from "react";
-import {  Input, Button, Card, CardBody, CardFooter, Tabs, Tab, Form, DateInput } from "@heroui/react";
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Input, Button, Card, CardBody, CardFooter, Tabs, Tab, Form, DateInput } from "@heroui/react";
 import { title, subtitle } from "@/components/primitives";
 import DefaultLayout from "@/layouts/default";
-import { useUser } from "@/hooks/useUser";
-import {  getLocalTimeZone, today } from "@internationalized/date";
+import { useUser } from '../hooks/useUser';
+import { getLocalTimeZone, today, CalendarDate, parseDate } from "@internationalized/date";
+import { useDateFormatter } from '@react-aria/i18n';
+const Login: React.FC = () => {
+    const navigate = useNavigate();
+    const {
+        login,
+        isLoggingIn,
+        loginError,
+        register,
+        isRegistering,
+        registerError,
+        isAuthenticated,
+        isCheckingAuth
+    } = useUser();
 
-export default function LoginPage() {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [selected, setSelected] = useState<"login" | "register">("login");
@@ -16,11 +28,11 @@ export default function LoginPage() {
     const [registerPassword, setRegisterPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [email, setEmail] = useState("");
-    const [dob, setDob] = useState<Date | null>(null);
+    const [dob, setDob] = useState<CalendarDate | any>(parseDate("2025-01-01"));
     const [dobError, setDobError] = useState("");
 
     // Password validation
-    const passwordErrors = [];
+    const passwordErrors: string[] = [];
     if (registerPassword) {
         if (registerPassword.length < 8) {
             passwordErrors.push("Password must be 8 characters or more");
@@ -36,12 +48,14 @@ export default function LoginPage() {
         }
     }
 
+
+
     // Validate date of birth
     useEffect(() => {
         if (dob) {
             const currentDate = today(getLocalTimeZone());
 
-            // Check if user is at least 13 years old
+            // Check if user is at least 16 years old
             const minAge = 16;
             const dobYear = dob.year;
             const currentYear = currentDate.year;
@@ -50,8 +64,8 @@ export default function LoginPage() {
 
             // Adjust age if birthday hasn't occurred yet this year
             if (
-                currentDate.month < dob.month ||
-                (currentDate.month === dob.month && currentDate.day < dob.day)
+                dob.month > currentDate.month ||
+                (dob.month === currentDate.month && dob.day > currentDate.day)
             ) {
                 age--;
             }
@@ -68,28 +82,36 @@ export default function LoginPage() {
         }
     }, [dob]);
 
-    // Use the existing useUser hook for authentication
-    const {
-        login,
-        isLoggingIn,
-        loginError,
-        register,
-        isRegistering,
-        registerError,
-    } = useUser();
+    // Auto-navigate away if already logged in
+    useEffect(() => {
+        if (isAuthenticated && !isCheckingAuth) {
+            navigate('/');
+        }
+    }, [isAuthenticated, isCheckingAuth, navigate]);
 
-    const handleLoginSubmit = (e) => {
+    // Handle login form submission
+    const handleLoginSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.currentTarget));
-        login({ username: data.username, password: data.password });
+        const formData = new FormData(e.currentTarget);
+        const username = formData.get('username') as string;
+        const password = formData.get('password') as string;
+
+        login({ username, password });
     };
 
-    const handleRegisterSubmit = (e) => {
+    // Handle register form submission
+    const handleRegisterSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.currentTarget));
+        const formData = new FormData(e.currentTarget);
+
+        // Get form values with proper type casting
+        const username = formData.get('username') as string;
+        const password = formData.get('password') as string;
+        const confirmPassword = formData.get('confirmPassword') as string;
+        const email = formData.get('email') as string;
 
         // Basic validation
-        if (data.password !== data.confirmPassword) {
+        if (password !== confirmPassword) {
             console.error("Passwords don't match");
             return;
         }
@@ -105,19 +127,37 @@ export default function LoginPage() {
         }
 
 
+        // Convert CalendarDate to string format for the API
+        const dobString = dob.toString();
+
         // Call the register function from useUser hook
         register({
-            username: data.username,
-            password: data.password,
-            email: data.email,
-            dob: data.dob,
+            username,
+            password,
+            email,
+            dob: dobString,
         });
     };
+
+    // Show loading state while checking authentication
+    if (isCheckingAuth) {
+        return (
+            <div className="flex justify-center items-center min-h-screen">
+                <p>Checking authentication status...</p>
+            </div>
+        );
+    }
+
+    // If already authenticated, this will redirect via the useEffect
 
     return (
         <DefaultLayout>
             <section className="flex flex-col items-center justify-center py-12 px-4">
-                <Tabs aria-label="Auth Tabs" selectedKey={selected} onSelectionChange={setSelected}>
+                <Tabs
+                    aria-label="Auth Tabs"
+                    selectedKey={selected}
+                    onSelectionChange={(key) => setSelected(key as "login" | "register")}
+                >
                     <Tab key="login" title="Login">
                         <div className="w-full max-w-md">
                             <div className="text-center mb-8">
@@ -132,7 +172,7 @@ export default function LoginPage() {
                                         <Input
                                             isRequired
                                             label="Username"
-                                            labelPlacement="outside"
+
                                             name="username"
                                             placeholder="Enter your username"
                                             value={username}
@@ -142,7 +182,7 @@ export default function LoginPage() {
                                         <Input
                                             isRequired
                                             label="Password"
-                                            labelPlacement="outside"
+
                                             name="password"
                                             type="password"
                                             placeholder="Enter your password"
@@ -174,7 +214,7 @@ export default function LoginPage() {
                                             variant="light"
                                             color="primary"
                                             size="sm"
-                                            onClick={() => setSelected("register")}
+                                            onPress={() => setSelected("register")}
                                         >
                                             Sign up
                                         </Button>
@@ -197,7 +237,6 @@ export default function LoginPage() {
                                         <Input
                                             isRequired
                                             label="Username"
-                                            labelPlacement="outside"
                                             name="username"
                                             placeholder="Choose a username"
                                             value={registerUsername}
@@ -213,7 +252,6 @@ export default function LoginPage() {
                                         <Input
                                             isRequired
                                             label="Email"
-                                            labelPlacement="outside"
                                             name="email"
                                             type="email"
                                             placeholder="Enter your email"
@@ -229,10 +267,8 @@ export default function LoginPage() {
 
                                         <DateInput
                                             isRequired
-                                            label="Date of Birth"
-                                            labelPlacement="outside"
+                                            label="Date of Birth"                                            
                                             name="dob"
-                                            placeholder="Select your date of birth"
                                             value={dob}
                                             onChange={setDob}
                                             isInvalid={!!dobError}
@@ -243,7 +279,6 @@ export default function LoginPage() {
                                         <Input
                                             isRequired
                                             label="Password"
-                                            labelPlacement="outside"
                                             name="password"
                                             type="password"
                                             placeholder="Create a password"
@@ -262,25 +297,18 @@ export default function LoginPage() {
                                         <Input
                                             isRequired
                                             label="Confirm Password"
-                                            labelPlacement="outside"
                                             name="confirmPassword"
                                             type="password"
                                             placeholder="Confirm your password"
                                             value={confirmPassword}
                                             onValueChange={setConfirmPassword}
-                                            isInvalid={confirmPassword && confirmPassword !== registerPassword}
+                                            isInvalid={confirmPassword !== "" && confirmPassword !== registerPassword}
                                             errorMessage={() =>
-                                                confirmPassword && confirmPassword !== registerPassword
+                                                confirmPassword !== "" && confirmPassword !== registerPassword
                                                     ? "Passwords don't match"
                                                     : null
                                             }
                                         />
-
-                                        {registerError && (
-                                            <div className="text-danger text-sm">
-                                                {registerError instanceof Error ? registerError.message : "Registration failed. Please try again."}
-                                            </div>
-                                        )}
 
                                         <Button
                                             type="submit"
@@ -291,6 +319,12 @@ export default function LoginPage() {
                                         >
                                             {isRegistering ? "Creating account..." : "Create account"}
                                         </Button>
+
+                                        {registerError && (
+                                            <div className="text-danger text-sm">
+                                                {registerError instanceof Error ? registerError.message : "Registration failed. Please try again."}
+                                            </div>
+                                        )}
                                     </Form>
                                 </CardBody>
 
@@ -301,7 +335,7 @@ export default function LoginPage() {
                                             variant="light"
                                             color="primary"
                                             size="sm"
-                                            onClick={() => setSelected("login")}
+                                            onPress={() => setSelected("login")}
                                         >
                                             Sign in
                                         </Button>
@@ -314,4 +348,6 @@ export default function LoginPage() {
             </section>
         </DefaultLayout>
     );
-}
+};
+
+export default Login;

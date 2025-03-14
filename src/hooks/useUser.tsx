@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
-import { authService, userService, userSignupData } from '../services/services';
+import { useNavigate } from 'react-router';
+import { authService, userService, userSignupData, tokenManager } from '../services/services';
+import axios from 'axios';
+import { useState, useEffect } from 'react';
 
 /**
  * Custom hook for managing user authentication and profile data
@@ -25,54 +27,108 @@ import { authService, userService, userSignupData } from '../services/services';
 export function useUser() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
+    const [storedUser, setStoredUser] = useState<any>(null);
+    const [isInitialized, setIsInitialized] = useState(false);
 
     // Query key constants for better organization and consistency
     // These keys are used for caching and invalidation
     const QUERY_KEYS = {
         currentUser: ['currentUser'],
         userProfile: (username: string) => ['userProfile', username],
+        authStatus: ['authStatus'],
     };
 
     /**
-     * Fetch the current logged-in user's data
-     * 
-     * With useState approach, you would need:
-     * - useState for user data, loading state, and error state
-     * - useEffect to fetch data on component mount
-     * - Manual refetching function
-     * 
-     * TanStack Query handles all of this automatically and provides:
-     * - Cached data with configurable stale time
-     * - Loading and error states
-     * - Refetch function
+     * Check authentication status - both cookie and token
      */
     const {
-        data: currentUser,         // The cached user data
-        isLoading: isLoadingUser,  // True while the initial fetch is happening
-        isError: isErrorUser,      // True if the fetch failed
-        error: userError,          // The error object if the fetch failed
-        refetch: refetchUser,      // Function to manually refetch data
+        data: authStatus,
+        isLoading: isCheckingAuth,
+        refetch: recheckAuth
     } = useQuery({
-        queryKey: QUERY_KEYS.currentUser,  // Unique identifier for this query in the cache
+        queryKey: QUERY_KEYS.authStatus,
+        queryFn: async () => {
+            try {
+                return await authService.checkAuth();
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+                // Return false instead of letting the error propagate
+                return false;
+            }
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        retry: false,
+        // Only run this query if we have a token
+        enabled: !!tokenManager.getToken() && isInitialized,
+        refetchOnWindowFocus: false, // Prevent refetching on window focus
+    });
+
+    /**
+     * Fetch the current logged-in user's data, but only if authenticated
+     */
+    const {
+        data: currentUser,
+        isLoading: isLoadingUser,
+        isError: isErrorUser,
+        error: userError,
+        refetch: refetchUser,
+    } = useQuery({
+        queryKey: QUERY_KEYS.currentUser,
         queryFn: async () => {
             try {
                 const response = await userService.getCurrentUser();
-                return response.data;
+                return response.data || null;
             } catch (error) {
-               console.error(error);
+                console.error('Error fetching current user:', error);
+                if (axios.isAxiosError(error) && error.response?.status === 401) {
+                    localStorage.removeItem('user');
+                    tokenManager.removeToken();
+                    setStoredUser(null);
+                }
                 return null;
             }
         },
-        // Don't refetch on window focus for auth state to avoid disrupting user experience
+        enabled: !!authStatus && isInitialized,
         refetchOnWindowFocus: false,
-        // Stale time of 5 minutes - user data doesn't change that frequently
         staleTime: 5 * 60 * 1000,
+        retry: 1,
     });
+
+    // Check for stored user and token on component mount
+    useEffect(() => {
+        const user = localStorage.getItem('user');
+        if (user) {
+            try {
+                setStoredUser(JSON.parse(user));
+            } catch (e) {
+                console.error('Error parsing stored user:', e);
+                localStorage.removeItem('user');
+            }
+        }
+
+        // Only attempt to refresh if we have a token
+        const token = tokenManager.getToken();
+        if (token && tokenManager.isTokenExpired()) {
+            console.log('Token is expired, attempting to refresh');
+            authService.refreshSession()
+                .catch(() => {
+                    console.log('Failed to refresh token, clearing auth state');
+                    localStorage.removeItem('user');
+                    tokenManager.removeToken();
+                    setStoredUser(null);
+                })
+                .finally(() => {
+                    setIsInitialized(true);
+                });
+        } else {
+            setIsInitialized(true);
+        }
+    }, []);
 
     /**
      * Check if the user is authenticated
      */
-    const isAuthenticated = !!currentUser;
+    const isAuthenticated = !!authStatus && (!!currentUser || !!storedUser);
 
     /**
      * Login mutation - handles user login and updates the current user data
@@ -90,16 +146,32 @@ export function useUser() {
      * - Integration with the query cache
      */
     const loginMutation = useMutation({
-        // The function that performs the mutation
         mutationFn: async ({ username, password }: { username: string; password: string }) => {
-            return await authService.login(username, password);
+            try {
+                console.log('Login mutation called with:', username);
+                return await authService.login(username, password);
+            } catch (error) {
+                console.error('Login mutation error:', error);
+                throw error;
+            }
         },
-        // Called when the mutation succeeds
-        onSuccess: () => {
-            // After successful login, refetch the current user data
-            // This invalidates the cache and triggers a refetch
+        onSuccess: (data) => {
+            console.log('Login successful, storing user data');
+
+            // Store user data
+            localStorage.setItem('user', JSON.stringify(data));
+            setStoredUser(data);
+
+            // Refresh auth status and user data
+            recheckAuth();
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
+
+            // Redirect to home page after successful login
+            navigate('/');
         },
+        onError: (error) => {
+            console.error('Login mutation error handler:', error);
+        }
     });
 
     /**
@@ -110,7 +182,8 @@ export function useUser() {
             return await authService.register(userData);
         },
         onSuccess: () => {
-            
+            // Optionally redirect to login after successful registration
+            // navigate('/login');
         },
     });
 
@@ -125,11 +198,14 @@ export function useUser() {
             return await authService.logout();
         },
         onSuccess: () => {
-            // After successful logout, clear the current user data and other relevant queries
-            // This immediately updates the UI to reflect the logged-out state
+            localStorage.removeItem('user');
+            tokenManager.removeToken();
+            setStoredUser(null);
+
             queryClient.setQueryData(QUERY_KEYS.currentUser, null);
-            // Invalidate all queries to ensure fresh data after login
-            queryClient.invalidateQueries();
+            queryClient.setQueryData(QUERY_KEYS.authStatus, false);
+
+            navigate('/login');
         },
     });
 
@@ -227,12 +303,13 @@ export function useUser() {
      */
     const refreshSession = async () => {
         try {
-            await authService.refreshSession();
-            // After successful refresh, refetch the current user data
+            const result = await authService.refreshSession();
+            recheckAuth();
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
+            console.log(result);
             return true;
         } catch (error) {
-            console.error(error);
+            console.error('Session refresh error:', error);
             return false;
         }
     };
@@ -245,6 +322,7 @@ export function useUser() {
         isErrorUser,
         userError,
         isAuthenticated,
+        isCheckingAuth,
         refetchUser,
 
         // Auth functions

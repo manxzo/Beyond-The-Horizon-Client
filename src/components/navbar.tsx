@@ -23,7 +23,7 @@ import {
   SearchIcon,
 } from "@/components/icons";
 import { Logo } from "@/components/icons";
-import { useUser } from "@/hooks/useUser";
+import{useUser} from "@/hooks/useUser";
 
 export const Navbar = () => {
   const { currentUser, isAuthenticated, logout } = useUser();

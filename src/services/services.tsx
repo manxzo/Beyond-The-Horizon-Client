@@ -1,56 +1,196 @@
 import axios, { AxiosError } from "axios";
 import { addToast } from "@heroui/react";
+import { jwtDecode } from "jwt-decode";
 // Get the API URL from environment variables or use a default
-const API_URL = import.meta.env.VITE_SERVER_URL;
+const API_URL = import.meta.env.VITE_SERVER_URL || 'https://bth-server-ywjx.shuttle.app';
 
-// Create an axios instance with default config
-const api = axios.create({
+// Log the API URL for debugging
+console.log('API URL:', API_URL);
+
+// Define the JWT payload interface
+interface JwtPayload {
+    id: string;
+    username: string;
+    role: string;
+    exp: number;
+    iat?: number;
+}
+
+// Create a token management utility with jsonwebtoken
+const tokenManager = {
+    getToken: () => localStorage.getItem('auth_token'),
+    setToken: (token: string) => localStorage.setItem('auth_token', token),
+    removeToken: () => localStorage.removeItem('auth_token'),
+    isTokenExpired: () => {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return true;
+
+        try {
+            // Use jwtDecode instead of jwt_decode
+            const decoded = jwtDecode<JwtPayload>(token);
+
+            // Check if the token is expired
+            const currentTime = Date.now() / 1000;
+            return decoded.exp < currentTime;
+        } catch (e) {
+            console.error('Error checking token expiration:', e);
+            return true;
+        }
+    },
+    getDecodedToken: () => {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return null;
+
+        try {
+            return jwtDecode<JwtPayload>(token);
+        } catch (e) {
+            console.error('Error decoding token:', e);
+            return null;
+        }
+    },
+    lastRefreshAttempt: 0,
+    canAttemptRefresh: () => {
+        const now = Date.now();
+        // Only allow refresh attempts every 30 seconds
+        if (now - tokenManager.lastRefreshAttempt < 30000) {
+            return false;
+        }
+        tokenManager.lastRefreshAttempt = now;
+        return true;
+    }
+};
+
+// Create two axios instances - one for public routes and one for protected routes
+const publicApi = axios.create({
     baseURL: API_URL,
-    withCredentials: true, 
+    withCredentials: true, // Always send cookies for public routes too
     headers: {
         "Content-Type": "application/json",
     },
+    timeout: 10000,
 });
 
-// Response interceptor for handling errors globally
-api.interceptors.response.use(
-    (response) => response,
-    (error: AxiosError) => {
-        // Handle session expiration or authentication errors
-        if (error.response?.status === 401) {
-            // You might want to redirect to login or refresh token here
-            console.error("Authentication error:", error.response?.data);
-        }
+const api = axios.create({
+    baseURL: API_URL,
+    withCredentials: true,
+    headers: {
+        "Content-Type": "application/json",
+    },
+    timeout: 10000,
+});
 
-        // Add toast notification for API errors
-        let errorMessage = "An error occurred with the API request";
+// Add request interceptors for both instances
+[publicApi, api].forEach(instance => {
+    instance.interceptors.request.use(
+        (config) => {
+            // Log outgoing requests for debugging
+            console.log(`Request: ${config.method?.toUpperCase()} ${config.url}`, config);
 
-        // Try to extract error message from different response formats
-        if (error.response?.data) {
-            const data = error.response.data;
-            if (typeof data === 'string') {
-                // Handle string error responses
-                errorMessage = data;
-            } else if (typeof data === 'object') {
-                // Handle object error responses with message property
-                if ('message' in data && typeof data.message === 'string') {
-                    errorMessage = data.message;
-                } else if ('errors' in data && Array.isArray(data.errors) && data.errors.length > 0) {
-                    // Handle errors array
-                    errorMessage = data.errors.join(', ');
+            // For protected routes, add the JWT token as a header
+            if (instance === api) {
+                const token = tokenManager.getToken();
+                if (token) {
+                    config.headers.Authorization = `Bearer ${token}`;
                 }
             }
+
+            return config;
+        },
+        (error) => {
+            console.error('Request error:', error);
+            return Promise.reject(error);
         }
+    );
 
-        addToast({
-            description: errorMessage,
-            color: "danger",
-            size: "lg"
-        });
+    // Add response interceptors for both instances
+    instance.interceptors.response.use(
+        (response) => {
+            // Log successful responses for debugging
+            console.log(`Response from ${response.config.url}:`, response.data);
+            return response;
+        },
+        async (error: AxiosError) => {
+            // Enhanced error logging
+            console.error('API Error:', {
+                url: error.config?.url,
+                method: error.config?.method,
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                message: error.message
+            });
 
-        return Promise.reject(error);
-    }
-);
+            // Handle session expiration or authentication errors
+            if (error.response?.status === 401) {
+                console.error("Authentication error:", error.response?.data);
+
+                // Try to refresh the session if token is expired
+                if (tokenManager.getToken() &&
+                    tokenManager.isTokenExpired() &&
+                    tokenManager.canAttemptRefresh() &&
+                    error.config) {
+                    try {
+                        // Call the refresh endpoint
+                        const refreshResponse = await publicApi.post("/api/public/auth/refresh");
+
+                        if (refreshResponse.data.token) {
+                            // Update the token
+                            tokenManager.setToken(refreshResponse.data.token);
+
+                            // Retry the original request with the new token
+                            const originalRequest = error.config;
+                            originalRequest.headers.Authorization = `Bearer ${refreshResponse.data.token}`;
+                            return axios(originalRequest);
+                        }
+                    } catch (refreshError) {
+                        console.error("Failed to refresh token:", refreshError);
+                        // Clear auth state on refresh failure
+                        tokenManager.removeToken();
+                        localStorage.removeItem('user');
+
+                        // Redirect to login page only if on a protected route
+                        if (window.location.pathname !== '/login' &&
+                            !window.location.pathname.startsWith('/public')) {
+                            window.location.href = '/login';
+                        }
+                    }
+                } else {
+                    // Clear auth state on other 401 errors
+                    tokenManager.removeToken();
+                    localStorage.removeItem('user');
+                }
+            }
+
+            // Add toast notification for API errors
+            let errorMessage = "An error occurred with the API request";
+
+            // Extract error message from response
+            if (error.response?.data) {
+                const data = error.response.data;
+                if (typeof data === 'string') {
+                    errorMessage = data;
+                } else if (typeof data === 'object') {
+                    if ('message' in data && typeof data.message === 'string') {
+                        errorMessage = data.message;
+                    } else if ('errors' in data && Array.isArray(data.errors) && data.errors.length > 0) {
+                        errorMessage = data.errors.join(', ');
+                    }
+                }
+            }
+
+            addToast({
+                description: errorMessage,
+                color: "danger",
+                size: "lg"
+            });
+
+            return Promise.reject(error);
+        }
+    );
+});
+
+// Export token manager for use in other parts of the app
+export { tokenManager };
 
 // Types for API responses
 export interface ApiResponse<T> {
@@ -65,13 +205,19 @@ export interface userSignupData {
     username: string,
     email: string,
     password: string,
-    dob: Date,
+    dob: string,
 }
 export const authService = {
     // POST /api/public/auth/register
     register: async (userData: userSignupData): Promise<ApiResponse<any>> => {
-        const response = await api.post("/api/public/auth/register", userData);
-        return response.data;
+        try {
+            console.log('Registering user:', userData);
+            const response = await publicApi.post("/api/public/auth/register", userData);
+            return response.data;
+        } catch (error) {
+            console.error('Registration error:', error);
+            throw error;
+        }
     },
 
     // POST /api/public/auth/login
@@ -79,24 +225,94 @@ export const authService = {
         username: string,
         password: string
     ): Promise<ApiResponse<any>> => {
-        const response = await api.post("/api/public/auth/login", {
-            username,
-            password,
-        });
-        return response.data;
+        try {
+            console.log('Logging in user:', username);
+            const response = await publicApi.post("/api/public/auth/login", {
+                username,
+                password,
+            });
+
+            // Store the JWT token if it's in the response
+            if (response.data.token) {
+                tokenManager.setToken(response.data.token);
+            }
+
+            return response.data;
+        } catch (error) {
+            console.error('Login error:', error);
+            throw error;
+        }
     },
 
-    // POST /api/public/auth/logout
+    // POST /api/protected/auth/logout
     logout: async (): Promise<ApiResponse<any>> => {
-        const response = await api.post("/api/public/auth/logout");
-        return response.data;
+        try {
+            // Make sure we have the latest token
+            const token = tokenManager.getToken();
+
+            // First try to call the server endpoint with explicit headers
+            const response = await axios({
+                method: 'post',
+                url: `${API_URL}/api/protected/auth/logout`,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                withCredentials: true  // Important for cookies
+            });
+
+            // Clear local storage regardless of server response
+            tokenManager.removeToken();
+            localStorage.removeItem('user');
+
+            return response.data;
+        } catch (error) {
+            console.error('Logout error:', error);
+
+            // Always clear local storage even if the server request fails
+            tokenManager.removeToken();
+            localStorage.removeItem('user');
+
+            // Return a successful response even if the server call failed
+            return {
+                success: true,
+                message: "Logged out locally"
+            };
+        }
     },
 
     // POST /api/public/auth/refresh
     refreshSession: async (): Promise<ApiResponse<any>> => {
-        const response = await api.post("/api/public/auth/refresh");
-        return response.data;
+        // Only attempt to refresh if we have a token
+        if (!tokenManager.getToken()) {
+            return Promise.reject(new Error("No token to refresh"));
+        }
+
+        return refreshSessionDebounced();
     },
+
+    // Check if the user is authenticated (both cookie and token)
+    checkAuth: async (): Promise<boolean> => {
+        try {
+            // First check if we have a token
+            const token = tokenManager.getToken();
+            if (!token) {
+                return false;
+            }
+
+            // Check if token is expired before making the request
+            if (tokenManager.isTokenExpired()) {
+                return false;
+            }
+
+            // Then verify with the server
+            await api.get("/api/protected/users/info");
+            return true;
+        } catch (error) {
+            console.error('Auth check error:', error);
+            return false;
+        }
+    }
 };
 
 // ==================== USER DATA SERVICES ====================
@@ -770,3 +986,31 @@ export const adminService = {
         return response.data;
     },
 };
+
+// Add this utility function at the top of your file
+const debounce = <T extends (...args: any[]) => Promise<any>>(fn: T, ms = 300) => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    return function (...args: Parameters<T>): ReturnType<T> {
+        return new Promise((resolve, reject) => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                fn(...args).then(resolve).catch(reject);
+            }, ms);
+        }) as ReturnType<T>;
+    };
+};
+
+// Then update the refreshSession function
+const refreshSessionDebounced = debounce(async () => {
+    try {
+        const response = await api.post("/api/public/auth/refresh");
+        // Update the JWT token if it's in the response
+        if (response.data.token) {
+            tokenManager.setToken(response.data.token);
+        }
+        return response.data;
+    } catch (error) {
+        console.error('Session refresh error:', error);
+        throw error;
+    }
+}, 1000); // 1 second debounce

@@ -7,15 +7,17 @@ import DefaultLayout from "@/layouts/default";
 
 const Home: React.FC = () => {
     const navigate = useNavigate();
-    const { currentUser, isLoadingUser } = useUser();
+    const { currentUser, isLoadingUser, isCheckingAuth } = useUser();
 
-    if (isLoadingUser) {
+    if (isLoadingUser || isCheckingAuth) {
         return (
-            <div className="container mx-auto px-4">
-                <div className="flex justify-center items-center min-h-[80vh]">
-                    <h2 className="text-xl font-semibold">Loading...</h2>
+            <DefaultLayout>
+                <div className="container mx-auto px-4">
+                    <div className="flex justify-center items-center min-h-[60vh]">
+                        <h2 className="text-xl font-semibold">Loading...</h2>
+                    </div>
                 </div>
-            </div>
+            </DefaultLayout>
         );
     }
 

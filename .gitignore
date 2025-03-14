@@ -29,3 +29,17 @@ yarn.lock
 package-lock.json
 bun.lockb
 .env
+
+# Testing
+coverage
+.nyc_output
+.vitest-cache
+__snapshots__
+*.spec.js.snap
+*.test.js.snap
+wallaby.js
+vitest.config.*
+test-results
+.wallaby
+test/*
+src/test/*
