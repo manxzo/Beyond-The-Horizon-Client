@@ -24,7 +24,8 @@ import {
 } from "@heroui/react";
 import { useUser } from "@/hooks/useUser";
 import { useMessage } from "@/hooks/useMessage";
-import { useWebSocket, WebSocketMessage, WebSocketMessageType } from "@/hooks/useWebSocket";
+import { useWebSocketContext } from "@/providers/WebSocketProvider";
+import { WebSocketMessage, WebSocketMessageType } from "@/hooks/useWebSocket";
 import DefaultLayout from "@/layouts/default";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
@@ -59,9 +60,6 @@ interface Conversation {
     unreadCount?: number;
 }
 
-// Define a type that includes all possible message types
-type MessageType = WebSocketMessageType | string;
-
 const Messages = () => {
     const { username } = useParams<{ username?: string }>();
     const navigate = useNavigate();
@@ -76,45 +74,8 @@ const Messages = () => {
         reportMessage,
     } = useMessage();
 
-    const { isConnected } = useWebSocket({
-        onMessage: (message: WebSocketMessage) => {
-            // Use type assertion to handle all message types
-            const messageType = message.type as MessageType;
-
-            // Skip authentication messages
-            if (
-                messageType === WebSocketMessageType.AUTHENTICATION_SUCCESS ||
-                messageType === WebSocketMessageType.AUTHENTICATION_ERROR ||
-                messageType === 'authentication_success' ||
-                messageType === 'authentication_error'
-            ) {
-                return;
-            }
-
-            if (
-                messageType === WebSocketMessageType.NEW_MESSAGE ||
-                messageType === WebSocketMessageType.MESSAGE_READ ||
-                messageType === WebSocketMessageType.EDITED_MESSAGE ||
-                messageType === WebSocketMessageType.DELETED_MESSAGE ||
-                messageType === WebSocketMessageType.SEEN_MESSAGE ||
-                messageType === 'new_message' ||
-                messageType === 'message_read' ||
-                messageType === 'edited_message' ||
-                messageType === 'deleted_message' ||
-                messageType === 'seen_message'
-            ) {
-                // Refresh messages if we're in the relevant conversation
-                if (
-                    activeConversation === message.payload.sender_username ||
-                    activeConversation === message.payload.receiver_username
-                ) {
-                    refetchMessages();
-                }
-                // Always refresh conversations list
-                refetchConversations();
-            }
-        },
-    });
+    // Use the WebSocket context
+    const { isConnected, subscribe } = useWebSocketContext();
 
     // State
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -161,15 +122,41 @@ const Messages = () => {
         enabled: !!activeConversation && isAuthenticated
     });
 
-    // Refetch data when component mounts or when username changes
+    // Subscribe to WebSocket messages
     useEffect(() => {
-        if (isAuthenticated) {
-            refetchConversations();
-            if (activeConversation) {
+        if (!isAuthenticated) return;
+
+        // Create a handler for message-related WebSocket messages
+        const handleMessageUpdates = (message: WebSocketMessage) => {
+            // Only process messages related to the active conversation
+            if (
+                activeConversation === message.payload.sender_username ||
+                activeConversation === message.payload.receiver_username ||
+                activeConversation === message.payload.conversation
+            ) {
                 refetchMessages();
             }
-        }
-    }, [refetchConversations, refetchMessages, activeConversation, isAuthenticated]);
+
+            // Always refresh conversations list for any message update
+            refetchConversations();
+        };
+
+        // Subscribe to relevant message types
+        const unsubscribeNewMessage = subscribe(WebSocketMessageType.NEW_MESSAGE, handleMessageUpdates);
+        const unsubscribeMessageRead = subscribe(WebSocketMessageType.MESSAGE_READ, handleMessageUpdates);
+        const unsubscribeEditedMessage = subscribe(WebSocketMessageType.EDITED_MESSAGE, handleMessageUpdates);
+        const unsubscribeDeletedMessage = subscribe(WebSocketMessageType.DELETED_MESSAGE, handleMessageUpdates);
+        const unsubscribeSeenMessage = subscribe(WebSocketMessageType.SEEN_MESSAGE, handleMessageUpdates);
+
+        // Clean up subscriptions
+        return () => {
+            unsubscribeNewMessage();
+            unsubscribeMessageRead();
+            unsubscribeEditedMessage();
+            unsubscribeDeletedMessage();
+            unsubscribeSeenMessage();
+        };
+    }, [isAuthenticated, activeConversation, subscribe, refetchMessages, refetchConversations]);
 
     // Process conversations data
     useEffect(() => {

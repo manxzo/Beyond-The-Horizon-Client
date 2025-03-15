@@ -2,14 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { authService, userService, userSignupData, tokenManager } from '../services/services';
 import { useState, useEffect } from 'react';
-import { useWebSocket } from './useWebSocket';
 
 export function useUser() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const [storedUser, setStoredUser] = useState<any>(null);
     const [isInitialized, setIsInitialized] = useState(false);
-    const { connect: connectWebSocket, disconnect: disconnectWebSocket, resetConnectionState } = useWebSocket();
 
     const QUERY_KEYS = {
         currentUser: ['currentUser'],
@@ -124,18 +122,12 @@ export function useUser() {
     const loginMutation = useMutation({
         mutationFn: async ({ username, password }: { username: string; password: string }) => {
             try {
-                // Reset WebSocket connection state
-                resetConnectionState();
-
                 console.log('Login mutation called with:', username);
                 const authResponse = await authService.login(username, password);
                 console.log('Login auth response:', authResponse);
                 if (authResponse && authResponse.data && 'token' in authResponse.data) {
                     // Set the token so the next request can use it
                     tokenManager.setToken(authResponse.data.token as string);
-
-                    // Connect to WebSocket after successful login
-                    connectWebSocket();
 
                     try {
                         // Fetch the complete user profile after login
@@ -209,9 +201,6 @@ export function useUser() {
             localStorage.removeItem('user');
             tokenManager.removeToken();
             setStoredUser(null);
-
-            // Disconnect WebSocket on logout with force=true to ensure complete disconnection
-            disconnectWebSocket(true);
 
             queryClient.setQueryData(QUERY_KEYS.currentUser, null);
             queryClient.setQueryData(QUERY_KEYS.authStatus, false);
@@ -333,15 +322,6 @@ export function useUser() {
             return false;
         }
     };
-
-    // Connect to WebSocket if user is authenticated
-    useEffect(() => {
-        if (isAuthenticated && !isCheckingAuth) {
-            // Reset connection state and connect
-            resetConnectionState();
-            connectWebSocket();
-        }
-    }, [isAuthenticated, isCheckingAuth, connectWebSocket, resetConnectionState]);
 
     // Return all functions and data for user management
     return {

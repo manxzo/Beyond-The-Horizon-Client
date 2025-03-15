@@ -3,7 +3,7 @@ import { HeroUIProvider } from "@heroui/system";
 import { ToastProvider } from "@heroui/react";
 import { useHref, useNavigate } from "react-router-dom";
 import type { NavigateOptions } from "react-router-dom";
-import { WebSocketProvider } from "./hooks/useWebSocket";
+import { WebSocketProvider } from "./providers/WebSocketProvider";
 
 declare module "@react-types/shared" {
   interface RouterConfig {

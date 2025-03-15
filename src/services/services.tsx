@@ -1,6 +1,8 @@
 import axios, { AxiosError, AxiosResponse } from "axios";
 import { addToast } from "@heroui/react";
 import { jwtDecode } from "jwt-decode";
+import CryptoJS from 'crypto-js';
+
 // Get the API URL from environment variables or use a default
 const API_URL = import.meta.env.VITE_SERVER_URL || 'https://bth-server-ywjx.shuttle.app';
 
@@ -13,38 +15,112 @@ interface JwtPayload {
     iat?: number;
 }
 
-// Create a token management utility with jsonwebtoken
+// Create a secure token management utility
 const tokenManager = {
-    getToken: () => localStorage.getItem('auth_token'),
-    setToken: (token: string) => localStorage.setItem('auth_token', token),
-    removeToken: () => localStorage.removeItem('auth_token'),
-    isTokenExpired: () => {
-        const token = localStorage.getItem('auth_token');
+    // Encryption key derived from a combination of browser fingerprint and constant
+    // This is not perfect security but better than plaintext
+    getEncryptionKey: (): string => {
+        const browserInfo = [
+            navigator.userAgent,
+            navigator.language,
+            screen.colorDepth,
+            screen.width,
+            screen.height
+        ].join('|');
+
+        // Create a hash of the browser info to use as encryption key
+        return CryptoJS.SHA256('BTH_SECURE_' + browserInfo).toString();
+    },
+
+    // Encrypt the token before storing
+    encryptToken: (token: string): string => {
+        return CryptoJS.AES.encrypt(token, tokenManager.getEncryptionKey()).toString();
+    },
+
+    // Decrypt the token after retrieving
+    decryptToken: (encryptedToken: string): string => {
+        try {
+            const bytes = CryptoJS.AES.decrypt(encryptedToken, tokenManager.getEncryptionKey());
+            return bytes.toString(CryptoJS.enc.Utf8);
+        } catch (e) {
+            console.error('Failed to decrypt token:', e);
+            return '';
+        }
+    },
+
+    // Get token from storage and decrypt it
+    getToken: (): string | null => {
+        const encryptedToken = localStorage.getItem('auth_token');
+        if (!encryptedToken) return null;
+
+        try {
+            return tokenManager.decryptToken(encryptedToken);
+        } catch (e) {
+            console.error('Error decrypting token:', e);
+            localStorage.removeItem('auth_token');
+            return null;
+        }
+    },
+
+    // Encrypt token and store it
+    setToken: (token: string): void => {
+        const encryptedToken = tokenManager.encryptToken(token);
+        localStorage.setItem('auth_token', encryptedToken);
+    },
+
+    removeToken: (): void => {
+        localStorage.removeItem('auth_token');
+    },
+
+    isTokenExpired: (): boolean => {
+        const token = tokenManager.getToken();
         if (!token) return true;
 
         try {
-            // Use jwtDecode instead of jwt_decode
             const decoded = jwtDecode<JwtPayload>(token);
 
             // Check if the token is expired
+            // Add a 60-second buffer to account for clock differences
             const currentTime = Date.now() / 1000;
-            return decoded.exp < currentTime;
+            return decoded.exp < currentTime - 60;
         } catch (e) {
+            console.error('Error checking token expiration:', e);
             return true;
         }
     },
-    getDecodedToken: () => {
-        const token = localStorage.getItem('auth_token');
+
+    // Check if token will expire soon (within 5 minutes)
+    willExpireSoon: (): boolean => {
+        const token = tokenManager.getToken();
+        if (!token) return false;
+
+        try {
+            const decoded = jwtDecode<JwtPayload>(token);
+
+            // Check if the token will expire within 5 minutes
+            const currentTime = Date.now() / 1000;
+            const fiveMinutesFromNow = currentTime + 5 * 60;
+
+            return decoded.exp < fiveMinutesFromNow;
+        } catch (e) {
+            return false;
+        }
+    },
+
+    getDecodedToken: (): JwtPayload | null => {
+        const token = tokenManager.getToken();
         if (!token) return null;
 
         try {
             return jwtDecode<JwtPayload>(token);
         } catch (e) {
+            console.error('Error decoding token:', e);
             return null;
         }
     },
+
     lastRefreshAttempt: 0,
-    canAttemptRefresh: () => {
+    canAttemptRefresh: (): boolean => {
         const now = Date.now();
         // Only allow refresh attempts every 30 seconds
         if (now - tokenManager.lastRefreshAttempt < 30000) {
@@ -77,10 +153,31 @@ const api = axios.create({
 // Add request interceptors for both instances
 [publicApi, api].forEach(instance => {
     instance.interceptors.request.use(
-        (config) => {
+        async (config) => {
             // For protected routes, add the JWT token as a header
             if (instance === api) {
                 const token = tokenManager.getToken();
+
+                // If token exists and will expire soon, try to refresh it
+                if (token && tokenManager.willExpireSoon() && tokenManager.canAttemptRefresh()) {
+                    try {
+                        // Call the refresh endpoint
+                        const refreshResponse = await publicApi.post("/api/public/auth/refresh");
+
+                        if (refreshResponse.data.token) {
+                            // Update the token
+                            tokenManager.setToken(refreshResponse.data.token);
+
+                            // Use the new token for this request
+                            config.headers.Authorization = `Bearer ${refreshResponse.data.token}`;
+                            return config;
+                        }
+                    } catch (refreshError) {
+                        console.error('Failed to refresh token:', refreshError);
+                        // Continue with the original token
+                    }
+                }
+
                 if (token) {
                     config.headers.Authorization = `Bearer ${token}`;
                 }

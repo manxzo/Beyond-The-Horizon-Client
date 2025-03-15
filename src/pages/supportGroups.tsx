@@ -73,10 +73,10 @@ const SupportGroups = () => {
     const myGroups = myGroupsResponse?.data || [];
 
     // Process groups to ensure all required fields are present
-    const processedAllGroups: SupportGroupSummary[] = (allGroups || []).map((group: SupportGroupSummary) => ({
+    const processedAllGroups: SupportGroupSummary[] = (allGroups || []).map((group: any) => ({
         ...group,
         // Add default values for missing fields
-        status: group.status || 'pending',
+        status: group.status || 'approved', // Default to 'approved' if status is missing
         is_member: group.is_member || false
     }));
 
@@ -200,7 +200,7 @@ const SupportGroups = () => {
                                             <div className="flex justify-between items-start mb-2">
                                                 <h3 className="text-lg font-semibold">{group.title}</h3>
                                                 <Badge color={group.status === 'approved' ? 'success' : 'warning'}>
-                                                    {group.status}
+                                                    {group.status || 'approved'}
                                                 </Badge>
                                             </div>
                                             <p className="text-gray-600 mb-4 line-clamp-3">{group.description}</p>
@@ -213,8 +213,8 @@ const SupportGroups = () => {
                                                 >
                                                     View Details
                                                 </Button>
-                                                {/* Show join button if not a member and group is approved or pending */}
-                                                {!group.is_member && (
+                                                {/* Show join button if not a member and group is approved */}
+                                                {!group.is_member && group.status === 'approved' && (
                                                     <Button
                                                         isLoading={isJoiningSupportGroup}
                                                         onPress={() => handleJoinGroup(group.support_group_id)}
