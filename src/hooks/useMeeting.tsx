@@ -1,5 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { meetingService } from '../services/services';
+import { meetingService, ApiResponse } from '../services/services';
+
+// Define interfaces to match server types
+interface GroupMeeting {
+    meeting_id: string;
+    group_chat_id: string | null;
+    support_group_id: string;
+    host_id: string;
+    title: string;
+    description: string | null;
+    scheduled_time: string;
+    status: 'upcoming' | 'ongoing' | 'ended';
+    participant_count?: number;
+    is_participant?: boolean;
+}
 
 export function useMeeting() {
     const queryClient = useQueryClient();
@@ -15,10 +29,25 @@ export function useMeeting() {
     const getMeetingParticipants = (meetingId: string) => ({
         queryKey: QUERY_KEYS.meetingParticipants(meetingId),
         queryFn: async () => {
-            // Return the response directly, not response.data
-            return await meetingService.getMeetingParticipants(meetingId);
+            // Get the full response
+            const response = await meetingService.getMeetingParticipants(meetingId);
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         enabled: !!meetingId,
+    });
+
+    /**
+     * Get all meetings for a specific support group
+     */
+    const getGroupMeetings = (groupId: string) => ({
+        queryKey: QUERY_KEYS.groupMeetings(groupId),
+        queryFn: async () => {
+            const response = await meetingService.getGroupMeetings(groupId);
+            return response;
+        },
+        select: (response: ApiResponse<GroupMeeting[]>) => response.data,
+        enabled: !!groupId,
     });
 
     // Define interfaces to match server types
@@ -33,21 +62,22 @@ export function useMeeting() {
      * Create a new meeting for a support group
      */
     const createMeetingMutation = useMutation({
-        mutationFn: async ({ 
-            groupId, 
-            meetingData 
-        }: { 
-            groupId: string; 
+        mutationFn: async ({
+            groupId,
+            meetingData
+        }: {
+            groupId: string;
             meetingData: CreateMeetingRequest
         }) => {
-            return await meetingService.createMeeting(groupId, meetingData);
+            const response = await meetingService.createMeeting(groupId, meetingData);
+            return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.groupMeetings(variables.groupId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.groupMeetings(variables.groupId)
             });
-            queryClient.invalidateQueries({ 
-                queryKey: ['supportGroup', variables.groupId] 
+            queryClient.invalidateQueries({
+                queryKey: ['supportGroup', variables.groupId]
             });
         },
     });
@@ -57,11 +87,12 @@ export function useMeeting() {
      */
     const joinMeetingMutation = useMutation({
         mutationFn: async (meetingId: string) => {
-            return await meetingService.joinMeeting(meetingId);
+            const response = await meetingService.joinMeeting(meetingId);
+            return response.data;
         },
         onSuccess: (_, meetingId) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.meetingParticipants(meetingId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.meetingParticipants(meetingId)
             });
         },
     });
@@ -71,11 +102,12 @@ export function useMeeting() {
      */
     const leaveMeetingMutation = useMutation({
         mutationFn: async (meetingId: string) => {
-            return await meetingService.leaveMeeting(meetingId);
+            const response = await meetingService.leaveMeeting(meetingId);
+            return response.data;
         },
         onSuccess: (_, meetingId) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.meetingParticipants(meetingId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.meetingParticipants(meetingId)
             });
         },
     });
@@ -85,12 +117,13 @@ export function useMeeting() {
      */
     const startMeetingMutation = useMutation({
         mutationFn: async (meetingId: string) => {
-            return await meetingService.startMeeting(meetingId);
+            const response = await meetingService.startMeeting(meetingId);
+            return response.data;
         },
         onSuccess: (_, meetingId) => {
             // Invalidate meeting participants
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.meetingParticipants(meetingId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.meetingParticipants(meetingId)
             });
         },
     });
@@ -100,11 +133,12 @@ export function useMeeting() {
      */
     const endMeetingMutation = useMutation({
         mutationFn: async (meetingId: string) => {
-            return await meetingService.endMeeting(meetingId);
+            const response = await meetingService.endMeeting(meetingId);
+            return response.data;
         },
         onSuccess: (_, meetingId) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.meetingParticipants(meetingId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.meetingParticipants(meetingId)
             });
         },
     });
@@ -112,6 +146,7 @@ export function useMeeting() {
     return {
         // Queries
         getMeetingParticipants,
+        getGroupMeetings,
 
         // Mutations
         createMeeting: createMeetingMutation.mutate,

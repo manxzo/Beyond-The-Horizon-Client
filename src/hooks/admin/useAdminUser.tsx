@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminService } from '../../services/services';
+import { adminService, ApiResponse } from '../../services/services';
 
 export function useAdminUser() {
     const queryClient = useQueryClient();
@@ -14,8 +14,10 @@ export function useAdminUser() {
     const getBannedUsers = () => ({
         queryKey: QUERY_KEYS.bannedUsers,
         queryFn: async () => {
-            return await adminService.getBannedUsers();
+            const response = await adminService.getBannedUsers();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
@@ -48,15 +50,16 @@ export function useAdminUser() {
                 reason,
                 ban_duration_days: banDurationDays
             };
-            return await adminService.banUser(
+            const response = await adminService.banUser(
                 userId,
                 reason,
                 banDurationDays
             );
+            return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.bannedUsers 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.bannedUsers
             });
         },
     });
@@ -67,11 +70,12 @@ export function useAdminUser() {
     const unbanUserMutation = useMutation({
         mutationFn: async (userId: string) => {
             const payload: UnbanUserRequest = { user_id: userId };
-            return await adminService.unbanUser(userId);
+            const response = await adminService.unbanUser(userId);
+            return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.bannedUsers 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.bannedUsers
             });
         },
     });

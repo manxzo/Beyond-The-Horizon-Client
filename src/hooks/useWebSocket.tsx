@@ -41,10 +41,14 @@ interface WebSocketContextType {
   isConnected: boolean;
   isConnecting: boolean;
   connect: () => void;
-  disconnect: () => void;
+  disconnect: (force?: boolean) => void;
   sendMessage: (type: string, payload: any) => boolean;
   reconnectAttempts: number;
   addMessageListener: (listener: (message: WebSocketMessage) => void) => () => void;
+  hasConnectionFailed: boolean;
+  retryConnection: () => void;
+  setReconnectAttempts: (count: number) => void;
+  resetConnectionState: () => void;
 }
 
 // Create the WebSocket context
@@ -53,20 +57,87 @@ const WebSocketContext = createContext<WebSocketContextType | null>(null);
 // Global message listeners array
 const messageListeners: ((message: WebSocketMessage) => void)[] = [];
 
+// Store connection failure information in session storage to persist across page refreshes
+const getConnectionFailureCount = (): number => {
+  const count = sessionStorage.getItem('ws_failure_count');
+  return count ? parseInt(count, 10) : 0;
+};
+
+const incrementConnectionFailureCount = (): number => {
+  const count = getConnectionFailureCount() + 1;
+  sessionStorage.setItem('ws_failure_count', count.toString());
+  return count;
+};
+
+const resetConnectionFailureCount = (): void => {
+  sessionStorage.removeItem('ws_failure_count');
+};
+
+// Store reconnect attempts in session storage to persist across page refreshes
+const getReconnectAttempts = (): number => {
+  const attempts = sessionStorage.getItem('ws_reconnect_attempts');
+  return attempts ? parseInt(attempts, 10) : 0;
+};
+
+const incrementReconnectAttempts = (): number => {
+  const attempts = getReconnectAttempts() + 1;
+  sessionStorage.setItem('ws_reconnect_attempts', attempts.toString());
+  return attempts;
+};
+
+const resetReconnectAttempts = (): void => {
+  sessionStorage.removeItem('ws_reconnect_attempts');
+};
+
+// Reset all WebSocket state
+const resetAllWebSocketState = (): void => {
+  resetConnectionFailureCount();
+  resetReconnectAttempts();
+};
+
 // WebSocket Provider component
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [reconnectAttempts, setReconnectAttemptsState] = useState(getReconnectAttempts());
+  const [hasConnectionFailed, setHasConnectionFailed] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionFailureCountRef = useRef<number>(getConnectionFailureCount());
+
+  // Custom function to update reconnect attempts in both state and session storage
+  const setReconnectAttempts = useCallback((count: number) => {
+    console.log(`Setting reconnect attempts to ${count}`);
+    // Update React state
+    setReconnectAttemptsState(count);
+    // Update session storage
+    if (count === 0) {
+      resetReconnectAttempts();
+    } else {
+      sessionStorage.setItem('ws_reconnect_attempts', count.toString());
+    }
+  }, []);
 
   // Function to establish WebSocket connection
   const connect = useCallback(() => {
-    // Don't connect if already connecting or connected
-    if (isConnecting || (socketRef.current && socketRef.current.readyState === WebSocket.OPEN)) {
-      console.log('WebSocket already connecting or connected, skipping connection attempt');
+    // If we already have a socket that's open or connecting, don't create a new one
+    if (socketRef.current) {
+      if (socketRef.current.readyState === WebSocket.OPEN) {
+        console.log('WebSocket already connected, updating state');
+        setIsConnected(true);
+        setIsConnecting(false);
+        return;
+      } else if (socketRef.current.readyState === WebSocket.CONNECTING) {
+        console.log('WebSocket already connecting, skipping connection attempt');
+        setIsConnecting(true);
+        return;
+      }
+    }
+
+    // Don't connect if already connecting
+    if (isConnecting) {
+      console.log('Already in connecting state, skipping connection attempt');
       return;
     }
 
@@ -77,6 +148,25 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Check if we've had too many failures and should stop trying automatically
+    const failureCount = getConnectionFailureCount();
+    connectionFailureCountRef.current = failureCount;
+
+    if (failureCount >= 3) {
+      console.log(`WebSocket connection has failed ${failureCount} times, not attempting automatic reconnection`);
+      setHasConnectionFailed(true);
+
+      // Only show the toast once per session
+      if (failureCount === 3) {
+        addToast({
+          description: "WebSocket connection unavailable. Some real-time features may not work.",
+          color: "danger",
+          size: "lg"
+        });
+      }
+      return;
+    }
+
     setIsConnecting(true);
     console.log('Attempting to connect to WebSocket...');
 
@@ -84,28 +174,67 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const API_URL = import.meta.env.VITE_SERVER_URL || 'https://bth-server-ywjx.shuttle.app';
 
     // Properly format the WebSocket URL
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let wsUrl = '';
 
-    // Handle different URL formats
-    if (API_URL.startsWith('http://') || API_URL.startsWith('https://')) {
+    // Force WSS for shuttle.app domains which are always HTTPS
+    if (API_URL.includes('shuttle.app')) {
+      const apiHostname = API_URL.replace(/^https?:\/\//, '');
+      wsUrl = `wss://${apiHostname}/api/protected/ws/connect?token=${encodeURIComponent(token)}`;
+      console.log('Using secure WebSocket (wss://) for shuttle.app domain');
+    }
+    // Handle different URL formats for other domains
+    else if (API_URL.startsWith('http://') || API_URL.startsWith('https://')) {
       // Extract the hostname (and port if present)
       const apiHostname = API_URL.replace(/^https?:\/\//, '');
+      // Use wss:// if the API URL is https:// or if we're on an https page
+      const wsProtocol = API_URL.startsWith('https://') || window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       wsUrl = `${wsProtocol}//${apiHostname}/api/protected/ws/connect?token=${encodeURIComponent(token)}`;
     } else {
-      // If it's just a hostname
+      // If it's just a hostname, use secure WebSocket if we're on a secure page
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       wsUrl = `${wsProtocol}//${API_URL}/api/protected/ws/connect?token=${encodeURIComponent(token)}`;
     }
 
     console.log('Connecting to WebSocket at:', wsUrl);
 
     try {
-      // Create WebSocket connection
+      // Create WebSocket connection with a timeout
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
+      // Set a connection timeout
+      const connectionTimeout = setTimeout(() => {
+        if (socket.readyState !== WebSocket.OPEN) {
+          console.error('WebSocket connection timeout');
+          socket.close();
+          setIsConnecting(false);
+
+          // Increment failure count
+          connectionFailureCountRef.current = incrementConnectionFailureCount();
+
+          if (connectionFailureCountRef.current >= 3) {
+            setHasConnectionFailed(true);
+            addToast({
+              description: "WebSocket connection unavailable. Some real-time features may not work.",
+              color: "danger",
+              size: "lg"
+            });
+          } else {
+            // Show a toast notification
+            addToast({
+              description: "WebSocket connection timeout. Real-time updates may be unavailable.",
+              color: "warning",
+              size: "lg"
+            });
+          }
+        }
+      }, 10000); // 10 second timeout
+
       socket.onopen = () => {
         console.log('WebSocket connection opened');
+        // Clear the connection timeout
+        clearTimeout(connectionTimeout);
+
         // We don't need to send the token as the first message anymore
         // The server will authenticate using the token in the query parameter
 
@@ -113,28 +242,87 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       };
 
       socket.onclose = (event) => {
+        // Clear the connection timeout if it exists
+        clearTimeout(connectionTimeout);
+
         console.log(`WebSocket connection closed: ${event.code} ${event.reason}`);
         setIsConnected(false);
         setIsConnecting(false);
 
         // Attempt to reconnect if not closed cleanly and within max attempts
-        if (event.code !== 1000 && reconnectAttempts < 5) {
-          console.log(`Attempting to reconnect (attempt ${reconnectAttempts + 1} of 5)...`);
-          if (reconnectTimeoutRef.current) {
-            clearTimeout(reconnectTimeoutRef.current);
+        if (event.code !== 1000) {
+          // Log more detailed information about the close event
+          if (event.code === 1006) {
+            console.warn("WebSocket closed abnormally (code 1006). This often indicates network issues or server unavailability.");
+            console.warn("Check if the server supports secure WebSocket connections (wss://)");
+
+            // Increment failure count for abnormal closures
+            connectionFailureCountRef.current = incrementConnectionFailureCount();
+
+            if (connectionFailureCountRef.current >= 3) {
+              console.log(`WebSocket connection has failed ${connectionFailureCountRef.current} times, stopping automatic reconnection`);
+              setHasConnectionFailed(true);
+
+              // Only show the toast once
+              if (connectionFailureCountRef.current === 3) {
+                addToast({
+                  description: "WebSocket connection unavailable. Some real-time features may not work.",
+                  color: "danger",
+                  size: "lg"
+                });
+              }
+
+              // Clear any pending reconnect attempts
+              if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+                reconnectTimeoutRef.current = null;
+              }
+
+              return;
+            }
+          } else if (event.code === 1001) {
+            console.log("WebSocket connection going away (browser navigating away from page)");
+          } else if (event.code === 1011) {
+            console.error("WebSocket server encountered an unexpected condition:", event.reason);
+          } else if (event.code === 1015) {
+            console.error("WebSocket TLS handshake failure. Check if server supports secure connections.");
           }
 
-          reconnectTimeoutRef.current = setTimeout(() => {
-            setReconnectAttempts(prev => prev + 1);
-            connect();
-          }, 5000);
-        } else if (reconnectAttempts >= 5) {
-          console.log('Maximum reconnect attempts reached, giving up');
+          if (reconnectAttempts < 5 && connectionFailureCountRef.current < 3) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff with 30s max
+            console.log(`Attempting to reconnect (attempt ${reconnectAttempts + 1} of 5) in ${delay / 1000}s...`);
+
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current);
+            }
+
+            reconnectTimeoutRef.current = setTimeout(() => {
+              // Update reconnect attempts in both state and session storage
+              const newAttempts = reconnectAttempts + 1;
+              setReconnectAttempts(newAttempts);
+              connect();
+            }, delay);
+          } else if (connectionFailureCountRef.current < 3) {
+            console.log('Maximum reconnect attempts reached, giving up');
+            addToast({
+              description: "Unable to establish WebSocket connection. Real-time updates will be unavailable.",
+              color: "danger",
+              size: "lg"
+            });
+          }
         }
       };
 
       socket.onerror = (error) => {
         console.error('WebSocket error:', error);
+        // Log more detailed information about the error
+        console.error('WebSocket error details:', {
+          url: wsUrl,
+          readyState: socket.readyState,
+          protocol: window.location.protocol,
+          host: window.location.host,
+          apiUrl: API_URL
+        });
         setIsConnecting(false);
       };
 
@@ -149,6 +337,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
             setIsConnected(true);
             setIsConnecting(false);
             setReconnectAttempts(0);
+            setHasConnectionFailed(false);
+
+            // Reset all WebSocket state on successful connection
+            resetAllWebSocketState();
+            connectionFailureCountRef.current = 0;
 
             // We don't call onOpen here because it's handled by the useEffect in the useWebSocket hook
           } else if (message.type === 'authentication_error') {
@@ -177,8 +370,24 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error creating WebSocket connection:', error);
       setIsConnecting(false);
+
+      // Increment failure count
+      connectionFailureCountRef.current = incrementConnectionFailureCount();
     }
-  }, [isConnecting, reconnectAttempts]);
+  }, [isConnecting, reconnectAttempts, hasConnectionFailed]);
+
+  // Function to manually retry connection after failures
+  const retryConnection = useCallback(() => {
+    console.log('Manually retrying WebSocket connection');
+    // Reset all WebSocket state
+    resetAllWebSocketState();
+    connectionFailureCountRef.current = 0;
+    setHasConnectionFailed(false);
+    setReconnectAttempts(0);
+
+    // Attempt to connect
+    connect();
+  }, [connect]);
 
   // Function to handle different message types
   const handleMessage = useCallback((message: WebSocketMessage) => {
@@ -285,20 +494,32 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Function to disconnect the WebSocket
-  const disconnect = useCallback(() => {
-    if (socketRef.current) {
-      socketRef.current.close(1000, 'User initiated disconnect');
-      socketRef.current = null;
-    }
+  const disconnect = useCallback((force: boolean = false) => {
+    // Update state regardless
+    setIsConnected(false);
+    setIsConnecting(false);
+    setReconnectAttempts(0);
 
+    // Reset reconnect attempts in session storage
+    resetReconnectAttempts();
+
+    // Clear any pending reconnect timeouts
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
 
-    setIsConnected(false);
-    setIsConnecting(false);
-    setReconnectAttempts(0);
+    // Always close the socket when disconnecting during logout
+    // or when forced or the page is unloading
+    if (force || document.visibilityState === 'hidden' || !document.hasFocus()) {
+      if (socketRef.current) {
+        console.log('Closing WebSocket connection');
+        socketRef.current.close(1000, 'User initiated disconnect');
+        socketRef.current = null;
+      }
+    } else {
+      console.log('Disconnect called but keeping socket alive for development');
+    }
   }, []);
 
   // Function to add a message listener
@@ -319,7 +540,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === 'token') {
         const token = tokenManager.getToken();
-        if (token && !isConnected && !isConnecting) {
+        if (token && !isConnected && !isConnecting && !hasConnectionFailed) {
           connect();
         } else if (!token && (isConnected || isConnecting)) {
           disconnect();
@@ -327,19 +548,38 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
+    // Handle page unload events to properly close the connection
+    const handleBeforeUnload = () => {
+      console.log('Page is unloading, closing WebSocket connection');
+      disconnect(true); // Force disconnect when page is unloading
+    };
 
-    // Initial connection if token exists
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Initial connection if token exists and we haven't had too many failures
     const token = tokenManager.getToken();
-    if (token) {
+    if (token && !hasConnectionFailed) {
       connect();
     }
 
+    // Cleanup function that runs when the component unmounts
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      disconnect();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+
+      // In development with StrictMode, React will mount and unmount components twice
+      // We don't want to disconnect during this process as it causes connection issues
+
+      // Only force disconnect if the page is actually unloading
+      if (document.visibilityState === 'hidden' || !document.hasFocus()) {
+        disconnect(true); // Force disconnect
+      } else {
+        // Use the regular disconnect which will preserve the socket in development
+        disconnect();
+      }
     };
-  }, [connect, disconnect, isConnected, isConnecting]);
+  }, [connect, disconnect, isConnected, isConnecting, hasConnectionFailed]);
 
   // Create the context value
   const contextValue: WebSocketContextType = {
@@ -349,7 +589,17 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     disconnect,
     sendMessage,
     reconnectAttempts,
-    addMessageListener
+    addMessageListener,
+    hasConnectionFailed,
+    retryConnection,
+    setReconnectAttempts,
+    resetConnectionState: () => {
+      console.log('Resetting WebSocket connection state');
+      resetAllWebSocketState();
+      connectionFailureCountRef.current = 0;
+      setHasConnectionFailed(false);
+      setReconnectAttempts(0);
+    },
   };
 
   return (

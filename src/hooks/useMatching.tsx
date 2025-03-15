@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { matchingService } from '../services/services';
+import { matchingService, ApiResponse } from '../services/services';
 
 export function useMatching() {
     const queryClient = useQueryClient();
@@ -15,8 +15,10 @@ export function useMatching() {
     const getRecommendedSponsors = () => ({
         queryKey: QUERY_KEYS.recommendedSponsors,
         queryFn: async () => {
-            return await matchingService.getRecommendedSponsors();
+            const response = await matchingService.getRecommendedSponsors();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 10 * 60 * 1000, // 10 minutes
     });
 
@@ -26,8 +28,10 @@ export function useMatching() {
     const getMatchingStatus = () => ({
         queryKey: QUERY_KEYS.matchingStatus,
         queryFn: async () => {
-            return await matchingService.getMatchingStatus();
+            const response = await matchingService.getMatchingStatus();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
@@ -36,7 +40,8 @@ export function useMatching() {
      */
     const requestSponsorMutation = useMutation({
         mutationFn: async (sponsorId: string) => {
-            return await matchingService.requestSponsor(sponsorId);
+            const response = await matchingService.requestSponsor(sponsorId);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.recommendedSponsors });
@@ -48,14 +53,15 @@ export function useMatching() {
      * Respond to a matching request (accept or decline)
      */
     const respondToMatchingRequestMutation = useMutation({
-        mutationFn: async ({ 
-            matchingRequestId, 
-            accept 
-        }: { 
-            matchingRequestId: string; 
-            accept: boolean 
+        mutationFn: async ({
+            matchingRequestId,
+            accept
+        }: {
+            matchingRequestId: string;
+            accept: boolean
         }) => {
-            return await matchingService.respondToMatchingRequest(matchingRequestId, accept);
+            const response = await matchingService.respondToMatchingRequest(matchingRequestId, accept);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.matchingStatus });

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { postService } from '../services/services';
+import { postService, ApiResponse } from '../services/services';
 
 export function usePost() {
     const queryClient = useQueryClient();
@@ -7,7 +7,7 @@ export function usePost() {
     const QUERY_KEYS = {
         posts: ['posts'],
         post: (id: string) => ['post', id],
-        filteredPosts: (page: number, searchTags?: string, sortBy?: string) => 
+        filteredPosts: (page: number, searchTags?: string, sortBy?: string) =>
             ['posts', 'filtered', page, searchTags, sortBy],
     };
 
@@ -29,8 +29,10 @@ export function usePost() {
     const getPosts = (page: number = 1, searchTags?: string, sortBy?: string) => ({
         queryKey: QUERY_KEYS.filteredPosts(page, searchTags, sortBy),
         queryFn: async () => {
-            return await postService.getPosts(page, searchTags, sortBy);
+            const response = await postService.getPosts(page, searchTags, sortBy);
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
@@ -40,8 +42,10 @@ export function usePost() {
     const getPost = (postId: string) => ({
         queryKey: QUERY_KEYS.post(postId),
         queryFn: async () => {
-            return await postService.getPost(postId);
+            const response = await postService.getPost(postId);
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         enabled: !!postId,
     });
 
@@ -50,7 +54,8 @@ export function usePost() {
      */
     const createPostMutation = useMutation({
         mutationFn: async (postData: CreatePostRequest) => {
-            return await postService.createPost(postData);
+            const response = await postService.createPost(postData);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['posts'] });
@@ -61,14 +66,15 @@ export function usePost() {
      * Update an existing post
      */
     const updatePostMutation = useMutation({
-        mutationFn: async ({ 
-            postId, 
-            postData 
-        }: { 
-            postId: string; 
-            postData: { content?: string; tags?: string[] } 
+        mutationFn: async ({
+            postId,
+            postData
+        }: {
+            postId: string;
+            postData: { content?: string; tags?: string[] }
         }) => {
-            return await postService.updatePost(postId, postData);
+            const response = await postService.updatePost(postId, postData);
+            return response.data;
         },
         onSuccess: (_, variables) => {
             // Invalidate specific post and posts list
@@ -82,7 +88,8 @@ export function usePost() {
      */
     const deletePostMutation = useMutation({
         mutationFn: async (postId: string) => {
-            return await postService.deletePost(postId);
+            const response = await postService.deletePost(postId);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['posts'] });
@@ -94,7 +101,8 @@ export function usePost() {
      */
     const likePostMutation = useMutation({
         mutationFn: async (postId: string) => {
-            return await postService.likePost(postId);
+            const response = await postService.likePost(postId);
+            return response.data;
         },
         onSuccess: (_, postId) => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.post(postId) });
@@ -105,12 +113,13 @@ export function usePost() {
      * Comment on a post
      */
     const commentOnPostMutation = useMutation({
-        mutationFn: async ({ 
-            postId, 
-            content, 
-            parentCommentId 
+        mutationFn: async ({
+            postId,
+            content,
+            parentCommentId
         }: CommentRequest) => {
-            return await postService.commentOnPost(postId, content, parentCommentId);
+            const response = await postService.commentOnPost(postId, content, parentCommentId);
+            return response.data;
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.post(variables.postId) });
@@ -121,16 +130,17 @@ export function usePost() {
      * Update a comment
      */
     const updateCommentMutation = useMutation({
-        mutationFn: async ({ 
-            commentId, 
-            content, 
-            postId 
-        }: { 
-            commentId: string; 
-            content: string; 
-            postId: string 
+        mutationFn: async ({
+            commentId,
+            content,
+            postId
+        }: {
+            commentId: string;
+            content: string;
+            postId: string
         }) => {
-            return await postService.updateComment(commentId, content);
+            const response = await postService.updateComment(commentId, content);
+            return response.data;
         },
         onSuccess: (_, variables) => {
             // Invalidate the post that contains this comment
@@ -142,14 +152,15 @@ export function usePost() {
      * Delete a comment
      */
     const deleteCommentMutation = useMutation({
-        mutationFn: async ({ 
-            commentId, 
-            postId 
-        }: { 
-            commentId: string; 
-            postId: string 
+        mutationFn: async ({
+            commentId,
+            postId
+        }: {
+            commentId: string;
+            postId: string
         }) => {
-            return await postService.deleteComment(commentId);
+            const response = await postService.deleteComment(commentId);
+            return response.data;
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.post(variables.postId) });

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminService } from '../../services/services';
+import { adminService, ApiResponse } from '../../services/services';
 
 export function useAdminResource() {
     const queryClient = useQueryClient();
@@ -14,8 +14,10 @@ export function useAdminResource() {
     const getPendingResources = () => ({
         queryKey: QUERY_KEYS.pendingResources,
         queryFn: async () => {
-            return await adminService.getPendingResources();
+            const response = await adminService.getPendingResources();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
@@ -44,15 +46,16 @@ export function useAdminResource() {
                 approved,
                 admin_comments: adminComments
             };
-            return await adminService.reviewResource(
+            const response = await adminService.reviewResource(
                 resourceId,
                 approved,
                 adminComments
             );
+            return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.pendingResources 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.pendingResources
             });
         },
     });

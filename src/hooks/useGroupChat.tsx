@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { groupChatService } from '../services/services';
+import { groupChatService, ApiResponse } from '../services/services';
 
 // Define interfaces to match server types
 interface SendGroupChatMessageRequest {
@@ -24,8 +24,10 @@ export function useGroupChat() {
     const getGroupChats = () => ({
         queryKey: QUERY_KEYS.groupChats,
         queryFn: async () => {
-            return await groupChatService.getGroupChats();
+            const response = await groupChatService.getGroupChats();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
@@ -35,8 +37,10 @@ export function useGroupChat() {
     const getGroupChatDetails = (chatId: string) => ({
         queryKey: QUERY_KEYS.groupChat(chatId),
         queryFn: async () => {
-            return await groupChatService.getGroupChatDetails(chatId);
+            const response = await groupChatService.getGroupChatDetails(chatId);
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         enabled: !!chatId,
     });
 
@@ -45,7 +49,8 @@ export function useGroupChat() {
      */
     const createGroupChatMutation = useMutation({
         mutationFn: async () => {
-            return await groupChatService.createGroupChat();
+            const response = await groupChatService.createGroupChat();
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChats });
@@ -56,18 +61,19 @@ export function useGroupChat() {
      * Send a message in a group chat
      */
     const sendGroupChatMessageMutation = useMutation({
-        mutationFn: async ({ 
-            chatId, 
-            content 
-        }: { 
-            chatId: string; 
-            content: string 
+        mutationFn: async ({
+            chatId,
+            content
+        }: {
+            chatId: string;
+            content: string
         }) => {
-            return await groupChatService.sendGroupChatMessage(chatId, content);
+            const response = await groupChatService.sendGroupChatMessage(chatId, content);
+            return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.groupChat(variables.chatId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.groupChat(variables.chatId)
             });
         },
     });
@@ -76,20 +82,21 @@ export function useGroupChat() {
      * Edit a message in a group chat
      */
     const editGroupChatMessageMutation = useMutation({
-        mutationFn: async ({ 
-            chatId, 
-            messageId, 
-            content 
-        }: { 
-            chatId: string; 
-            messageId: string; 
-            content: string 
+        mutationFn: async ({
+            chatId,
+            messageId,
+            content
+        }: {
+            chatId: string;
+            messageId: string;
+            content: string
         }) => {
-            return await groupChatService.editGroupChatMessage(chatId, messageId, content);
+            const response = await groupChatService.editGroupChatMessage(chatId, messageId, content);
+            return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.groupChat(variables.chatId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.groupChat(variables.chatId)
             });
         },
     });
@@ -98,18 +105,19 @@ export function useGroupChat() {
      * Delete a message from a group chat
      */
     const deleteGroupChatMessageMutation = useMutation({
-        mutationFn: async ({ 
-            chatId, 
-            messageId 
-        }: { 
-            chatId: string; 
-            messageId: string 
+        mutationFn: async ({
+            chatId,
+            messageId
+        }: {
+            chatId: string;
+            messageId: string
         }) => {
-            return await groupChatService.deleteGroupChatMessage(chatId, messageId);
+            const response = await groupChatService.deleteGroupChatMessage(chatId, messageId);
+            return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.groupChat(variables.chatId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.groupChat(variables.chatId)
             });
         },
     });
@@ -118,18 +126,19 @@ export function useGroupChat() {
      * Add a member to a group chat
      */
     const addGroupChatMemberMutation = useMutation({
-        mutationFn: async ({ 
-            chatId, 
-            memberId 
-        }: { 
-            chatId: string; 
-            memberId: string 
+        mutationFn: async ({
+            chatId,
+            memberId
+        }: {
+            chatId: string;
+            memberId: string
         }) => {
-            return await groupChatService.addGroupChatMember(chatId, memberId);
+            const response = await groupChatService.addGroupChatMember(chatId, memberId);
+            return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.groupChat(variables.chatId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.groupChat(variables.chatId)
             });
         },
     });
@@ -138,18 +147,19 @@ export function useGroupChat() {
      * Remove a member from a group chat
      */
     const removeGroupChatMemberMutation = useMutation({
-        mutationFn: async ({ 
-            chatId, 
-            memberId 
-        }: { 
-            chatId: string; 
-            memberId: string 
+        mutationFn: async ({
+            chatId,
+            memberId
+        }: {
+            chatId: string;
+            memberId: string
         }) => {
-            return await groupChatService.removeGroupChatMember(chatId, memberId);
+            const response = await groupChatService.removeGroupChatMember(chatId, memberId);
+            return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.groupChat(variables.chatId) 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.groupChat(variables.chatId)
             });
         },
     });

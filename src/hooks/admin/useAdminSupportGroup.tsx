@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminService } from '../../services/services';
+import { adminService, ApiResponse } from '../../services/services';
 
 export function useAdminSupportGroup() {
     const queryClient = useQueryClient();
@@ -14,8 +14,10 @@ export function useAdminSupportGroup() {
     const getPendingSupportGroups = () => ({
         queryKey: QUERY_KEYS.pendingSupportGroups,
         queryFn: async () => {
-            return await adminService.getPendingSupportGroups();
+            const response = await adminService.getPendingSupportGroups();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
@@ -44,15 +46,16 @@ export function useAdminSupportGroup() {
                 status,
                 admin_comments: adminComments
             };
-            return await adminService.reviewSupportGroup(
+            const response = await adminService.reviewSupportGroup(
                 supportGroupId,
                 status,
                 adminComments
             );
+            return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.pendingSupportGroups 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.pendingSupportGroups
             });
         },
     });

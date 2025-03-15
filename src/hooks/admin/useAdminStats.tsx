@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { adminService } from '../../services/services';
+import { adminService, ApiResponse } from '../../services/services';
 
 export function useAdminStats() {
     const QUERY_KEYS = {
@@ -12,9 +12,11 @@ export function useAdminStats() {
     const getAdminStats = () => ({
         queryKey: QUERY_KEYS.adminStats,
         queryFn: async () => {
-            // Return the response directly, not response.data
-            return await adminService.getAdminStats();
+            // Get the full response
+            const response = await adminService.getAdminStats();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 

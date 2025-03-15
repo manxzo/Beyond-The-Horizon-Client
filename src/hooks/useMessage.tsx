@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { messageService } from '../services/services';
+import { messageService, ApiResponse } from '../services/services';
 import { useWebSocket, WebSocketMessageType } from './useWebSocket';
 
 export function useMessage() {
@@ -30,8 +30,10 @@ export function useMessage() {
     const getConversations = () => ({
         queryKey: QUERY_KEYS.conversations,
         queryFn: async () => {
-            return await messageService.getConversations();
+            const response = await messageService.getConversations();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
@@ -41,8 +43,10 @@ export function useMessage() {
     const getMessages = (username: string) => ({
         queryKey: QUERY_KEYS.messages(username),
         queryFn: async () => {
-            return await messageService.getMessages(username);
+            const response = await messageService.getMessages(username);
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         enabled: !!username,
         staleTime: 10 * 1000, // 10 seconds
     });
@@ -53,13 +57,13 @@ export function useMessage() {
     const sendMessage = useMutation({
         mutationFn: async ({ receiverUsername, content }: { receiverUsername: string; content: string }) => {
             const response = await messageService.sendMessage(receiverUsername, content);
-            return response;
+            return response.data;
         },
         onSuccess: (data, variables) => {
             // Invalidate queries to refresh the conversation
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.receiverUsername) });
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
-            
+
             // No need to send WebSocket message here as the server will handle it
         },
     });
@@ -70,12 +74,12 @@ export function useMessage() {
     const markMessageSeen = useMutation({
         mutationFn: async ({ messageId, username }: { messageId: string; username: string }) => {
             const response = await messageService.markMessageSeen(messageId);
-            return response;
+            return response.data;
         },
         onSuccess: (data, variables) => {
             // Invalidate queries to refresh the conversation
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
-            
+
             // No need to send WebSocket message here as the server will handle it
         },
     });
@@ -86,12 +90,12 @@ export function useMessage() {
     const editMessage = useMutation({
         mutationFn: async ({ messageId, content, username }: { messageId: string; content: string; username: string }) => {
             const response = await messageService.editMessage(messageId, content);
-            return response;
+            return response.data;
         },
         onSuccess: (data, variables) => {
             // Invalidate queries to refresh the conversation
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
-            
+
             // No need to send WebSocket message here as the server will handle it
         },
     });
@@ -102,12 +106,12 @@ export function useMessage() {
     const deleteMessage = useMutation({
         mutationFn: async ({ messageId, username }: { messageId: string; username: string }) => {
             const response = await messageService.deleteMessage(messageId);
-            return response;
+            return response.data;
         },
         onSuccess: (data, variables) => {
             // Invalidate queries to refresh the conversation
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
-            
+
             // No need to send WebSocket message here as the server will handle it
         },
     });
@@ -116,14 +120,15 @@ export function useMessage() {
      * Report a message
      */
     const reportMessageMutation = useMutation({
-        mutationFn: async ({ 
-            messageId, 
-            reason 
-        }: { 
-            messageId: string; 
-            reason: string 
+        mutationFn: async ({
+            messageId,
+            reason
+        }: {
+            messageId: string;
+            reason: string
         }) => {
-            return await messageService.reportMessage(messageId, reason);
+            const response = await messageService.reportMessage(messageId, reason);
+            return response.data;
         },
     });
 

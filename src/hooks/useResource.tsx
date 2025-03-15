@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { resourceService } from '../services/services';
+import { resourceService, ApiResponse } from '../services/services';
 
 export function useResource() {
     const queryClient = useQueryClient();
@@ -15,8 +15,10 @@ export function useResource() {
     const getResources = () => ({
         queryKey: QUERY_KEYS.resources,
         queryFn: async () => {
-            return await resourceService.getResources();
+            const response = await resourceService.getResources();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
@@ -26,8 +28,10 @@ export function useResource() {
     const getResource = (resourceId: string) => ({
         queryKey: QUERY_KEYS.resource(resourceId),
         queryFn: async () => {
-            return await resourceService.getResource(resourceId);
+            const response = await resourceService.getResource(resourceId);
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         enabled: !!resourceId,
     });
 
@@ -49,7 +53,8 @@ export function useResource() {
      */
     const createResourceMutation = useMutation({
         mutationFn: async (resourceData: CreateResourceRequest) => {
-            return await resourceService.createResource(resourceData);
+            const response = await resourceService.createResource(resourceData);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.resources });
@@ -60,19 +65,22 @@ export function useResource() {
      * Update an existing resource
      */
     const updateResourceMutation = useMutation({
-        mutationFn: async ({ 
-            resourceId, 
-            resourceData 
-        }: { 
-            resourceId: string; 
-            resourceData: UpdateResourceRequest 
+        mutationFn: async ({
+            resourceId,
+            resourceData
+        }: {
+            resourceId: string;
+            resourceData: {
+                title?: string;
+                content?: string;
+                support_group_id?: string;
+            }
         }) => {
-            return await resourceService.updateResource(resourceId, resourceData);
+            const response = await resourceService.updateResource(resourceId, resourceData);
+            return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.resource(variables.resourceId) 
-            });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.resource(variables.resourceId) });
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.resources });
         },
     });
@@ -82,7 +90,8 @@ export function useResource() {
      */
     const deleteResourceMutation = useMutation({
         mutationFn: async (resourceId: string) => {
-            return await resourceService.deleteResource(resourceId);
+            const response = await resourceService.deleteResource(resourceId);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.resources });

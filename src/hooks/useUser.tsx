@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { authService, userService, userSignupData, tokenManager } from '../services/services';
+import { authService, userService, userSignupData, tokenManager, ApiResponse } from '../services/services';
 import { useState, useEffect } from 'react';
 import { useWebSocket } from './useWebSocket';
 
@@ -9,7 +9,7 @@ export function useUser() {
     const navigate = useNavigate();
     const [storedUser, setStoredUser] = useState<any>(null);
     const [isInitialized, setIsInitialized] = useState(false);
-    const { connect: connectWebSocket, disconnect: disconnectWebSocket } = useWebSocket();
+    const { connect: connectWebSocket, disconnect: disconnectWebSocket, setReconnectAttempts, resetConnectionState } = useWebSocket();
 
     const QUERY_KEYS = {
         currentUser: ['currentUser'],
@@ -25,7 +25,7 @@ export function useUser() {
         queryKey: QUERY_KEYS.authStatus,
         queryFn: async () => {
             try {
-                // Return the response directly, not response.data
+                // Return the boolean result directly
                 return await authService.checkAuth();
             } catch (error) {
                 console.error('Error checking auth status:', error);
@@ -51,8 +51,9 @@ export function useUser() {
     } = useQuery({
         queryKey: QUERY_KEYS.currentUser,
         queryFn: async () => {
-            // Return the response directly, not response.data
-            return await userService.getCurrentUser();
+            // Get the full response and return its data property
+            const response = await userService.getCurrentUser();
+            return response.data;
         },
         enabled: !!authStatus && isInitialized,
         refetchOnWindowFocus: false,
@@ -123,13 +124,15 @@ export function useUser() {
     const loginMutation = useMutation({
         mutationFn: async ({ username, password }: { username: string; password: string }) => {
             try {
+                // Reset WebSocket connection state
+                resetConnectionState();
+
                 console.log('Login mutation called with:', username);
                 const authResponse = await authService.login(username, password);
                 console.log('Login auth response:', authResponse);
-
-                if (authResponse && 'token' in authResponse) {
+                if (authResponse && authResponse.data && 'token' in authResponse.data) {
                     // Set the token so the next request can use it
-                    tokenManager.setToken(authResponse.token as string);
+                    tokenManager.setToken(authResponse.data.token as string);
 
                     // Connect to WebSocket after successful login
                     connectWebSocket();
@@ -141,19 +144,19 @@ export function useUser() {
 
                         // Combine the full profile data with the token
                         const completeUserData = {
-                            ...userProfileResponse,
-                            token: authResponse.token
+                            ...userProfileResponse.data,
+                            token: authResponse.data.token
                         };
 
                         return completeUserData;
                     } catch (profileError) {
                         console.error('Error fetching profile after login:', profileError);
                         // Fallback: return the auth response if profile fetch fails
-                        return authResponse;
+                        return authResponse.data;
                     }
                 }
 
-                return authResponse;
+                return authResponse.data;
             } catch (error) {
                 console.error('Login mutation error:', error);
                 throw error;
@@ -185,7 +188,8 @@ export function useUser() {
      */
     const registerMutation = useMutation({
         mutationFn: async (userData: userSignupData) => {
-            return await authService.register(userData);
+            const response = await authService.register(userData);
+            return response.data;
         },
         onSuccess: () => {
             // Optionally redirect to login after successful registration
@@ -198,15 +202,16 @@ export function useUser() {
      */
     const logoutMutation = useMutation({
         mutationFn: async () => {
-            return await authService.logout();
+            const response = await authService.logout();
+            return response.data;
         },
         onSuccess: () => {
             localStorage.removeItem('user');
             tokenManager.removeToken();
             setStoredUser(null);
 
-            // Disconnect WebSocket on logout
-            disconnectWebSocket();
+            // Disconnect WebSocket on logout with force=true to ensure complete disconnection
+            disconnectWebSocket(true);
 
             queryClient.setQueryData(QUERY_KEYS.currentUser, null);
             queryClient.setQueryData(QUERY_KEYS.authStatus, false);
@@ -229,7 +234,8 @@ export function useUser() {
             languages?: string[];
             privacy?: boolean;
         }) => {
-            return await userService.updateProfile(profileData);
+            const response = await userService.updateProfile(profileData);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
@@ -241,7 +247,8 @@ export function useUser() {
      */
     const updateAvatarMutation = useMutation({
         mutationFn: async (file: File) => {
-            return await userService.updateAvatar(file);
+            const response = await userService.updateAvatar(file);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
@@ -253,7 +260,8 @@ export function useUser() {
      */
     const resetAvatarMutation = useMutation({
         mutationFn: async () => {
-            return await userService.resetAvatar();
+            const response = await userService.resetAvatar();
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
@@ -265,7 +273,8 @@ export function useUser() {
      */
     const deleteAccountMutation = useMutation({
         mutationFn: async () => {
-            return await userService.deleteAccount();
+            const response = await userService.deleteAccount();
+            return response.data;
         },
         onSuccess: () => {
             queryClient.clear();
@@ -280,8 +289,9 @@ export function useUser() {
         const queryConfig = {
             queryKey: QUERY_KEYS.userProfile(username),
             queryFn: async () => {
-                // Return the response directly, not response.data
-                return await userService.getUserByName(username);
+                // Get the full response and return its data property
+                const response = await userService.getUserByName(username);
+                return response.data;
             },
             enabled: !!username,
         };
@@ -300,10 +310,10 @@ export function useUser() {
             const userResponse = await userService.getCurrentUser();
             console.log('User data after token refresh:', userResponse);
 
-            if (userResponse) {
+            if (userResponse && userResponse.data) {
                 const token = tokenManager.getToken();
                 const completeUserData = {
-                    ...userResponse,
+                    ...userResponse.data,
                     token
                 };
 
@@ -327,9 +337,11 @@ export function useUser() {
     // Connect to WebSocket if user is authenticated
     useEffect(() => {
         if (isAuthenticated && !isCheckingAuth) {
+            // Reset connection state and connect
+            resetConnectionState();
             connectWebSocket();
         }
-    }, [isAuthenticated, isCheckingAuth, connectWebSocket]);
+    }, [isAuthenticated, isCheckingAuth, connectWebSocket, resetConnectionState]);
 
     // Return all functions and data for user management
     return {

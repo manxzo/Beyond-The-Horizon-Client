@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminService } from '../../services/services';
+import { adminService, ApiResponse } from '../../services/services';
 
 export function useAdminSponsor() {
     const queryClient = useQueryClient();
@@ -14,8 +14,10 @@ export function useAdminSponsor() {
     const getPendingSponsorApplications = () => ({
         queryKey: QUERY_KEYS.pendingSponsorApplications,
         queryFn: async () => {
-            return await adminService.getPendingSponsorApplications();
+            const response = await adminService.getPendingSponsorApplications();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
@@ -44,15 +46,16 @@ export function useAdminSponsor() {
                 status,
                 admin_comments: adminComments
             };
-            return await adminService.reviewSponsorApplication(
+            const response = await adminService.reviewSponsorApplication(
                 applicationId,
                 status,
                 adminComments
             );
+            return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ 
-                queryKey: QUERY_KEYS.pendingSponsorApplications 
+            queryClient.invalidateQueries({
+                queryKey: QUERY_KEYS.pendingSponsorApplications
             });
         },
     });

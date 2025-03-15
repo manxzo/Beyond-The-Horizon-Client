@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { sponsorService } from '../services/services';
+import { sponsorService, ApiResponse } from '../services/services';
 
 export function useSponsor() {
     const queryClient = useQueryClient();
@@ -14,8 +14,10 @@ export function useSponsor() {
     const getSponsorApplicationStatus = () => ({
         queryKey: QUERY_KEYS.sponsorApplicationStatus,
         queryFn: async () => {
-            return await sponsorService.checkSponsorApplicationStatus();
+            const response = await sponsorService.checkSponsorApplicationStatus();
+            return response;
         },
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
@@ -26,7 +28,8 @@ export function useSponsor() {
      */
     const applyForSponsorMutation = useMutation({
         mutationFn: async (applicationInfo: string) => {
-            return await sponsorService.applyForSponsor(applicationInfo);
+            const response = await sponsorService.applyForSponsor(applicationInfo);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
@@ -40,7 +43,8 @@ export function useSponsor() {
      */
     const updateSponsorApplicationMutation = useMutation({
         mutationFn: async (applicationInfo: string) => {
-            return await sponsorService.updateSponsorApplication(applicationInfo);
+            const response = await sponsorService.updateSponsorApplication(applicationInfo);
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
@@ -54,7 +58,8 @@ export function useSponsor() {
      */
     const deleteSponsorApplicationMutation = useMutation({
         mutationFn: async () => {
-            return await sponsorService.deleteSponsorApplication();
+            const response = await sponsorService.deleteSponsorApplication();
+            return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({

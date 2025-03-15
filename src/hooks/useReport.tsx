@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { reportService } from '../services/services';
+import { reportService, ApiResponse } from '../services/services';
 
 // Define interfaces to match server types
 interface CreateReportRequest {
@@ -15,7 +15,8 @@ export function useReport() {
      */
     const createReportMutation = useMutation({
         mutationFn: async (reportData: CreateReportRequest) => {
-            return await reportService.createReport(reportData);
+            const response = await reportService.createReport(reportData);
+            return response.data;
         },
     });
 

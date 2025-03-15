@@ -28,6 +28,7 @@ import { useWebSocket, WebSocketMessage, WebSocketMessageType } from "@/hooks/us
 import { useReport } from "@/hooks/useReport";
 import DefaultLayout from "@/layouts/default";
 import { formatDistanceToNow } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
 
 // Icons
 import {
@@ -123,8 +124,6 @@ export default function MessagesPage() {
     const [activeConversation, setActiveConversation] = useState<string | null>(
         username || null
     );
-    const [isLoadingConversations, setIsLoadingConversations] = useState(true);
-    const [isLoadingMessages, setIsLoadingMessages] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editMessageContent, setEditMessageContent] = useState("");
     const [reportReason, setReportReason] = useState("");
@@ -143,58 +142,62 @@ export default function MessagesPage() {
         onClose: closeReportModal,
     } = useDisclosure();
 
-    // Fetch conversations
-    const fetchConversations = async () => {
-        setIsLoadingConversations(true);
-        try {
-            const { queryFn } = getConversations();
-            const response = await queryFn();
-            if (response && response.data && response.data.usernames) {
-                setConversations(
-                    response.data.usernames.map((username: string) => ({ username }))
-                );
-            }
-        } catch (error) {
-            console.error("Error fetching conversations:", error);
-        } finally {
-            setIsLoadingConversations(false);
+    // Use React Query for conversations
+    const {
+        data: conversationsResponse,
+        isLoading: isLoadingConversations,
+        refetch: refetchConversationsQuery
+    } = useQuery({
+        ...getConversations(),
+        enabled: isAuthenticated
+    });
+
+    // Use React Query for messages when there's an active conversation
+    const {
+        data: messagesResponse,
+        isLoading: isLoadingMessages,
+        refetch: refetchMessagesQuery
+    } = useQuery({
+        ...getMessages(activeConversation || ''),
+        enabled: !!activeConversation && isAuthenticated
+    });
+
+    // Process conversations data
+    useEffect(() => {
+        if (conversationsResponse?.data?.usernames) {
+            setConversations(
+                conversationsResponse.data.usernames.map((username: string) => ({ username }))
+            );
+        } else {
+            setConversations([]);
         }
-    };
+    }, [conversationsResponse]);
 
-    // Fetch messages for a conversation
-    const fetchMessages = async (username: string) => {
-        if (!username) return;
+    // Process messages data and mark unread messages as seen
+    useEffect(() => {
+        if (messagesResponse?.data && Array.isArray(messagesResponse.data) && activeConversation) {
+            setMessages(messagesResponse.data);
 
-        setIsLoadingMessages(true);
-        try {
-            const { queryFn } = getMessages(username);
-            const response = await queryFn();
-            if (response && response.data) {
-                setMessages(response.data);
+            // Mark unread messages as seen
+            const unreadMessages = messagesResponse.data.filter(
+                (msg: Message) =>
+                    msg.receiver_id === currentUser?.user_id &&
+                    !msg.seen_at
+            );
 
-                // Mark unread messages as seen
-                const unreadMessages = response.data.filter(
-                    (msg: Message) =>
-                        msg.receiver_id === currentUser?.user_id &&
-                        !msg.seen_at
-                );
-
-                for (const msg of unreadMessages) {
-                    markMessageSeen({ messageId: msg.message_id, username });
-                }
+            for (const msg of unreadMessages) {
+                markMessageSeen({ messageId: msg.message_id, username: activeConversation });
             }
-        } catch (error) {
-            console.error("Error fetching messages:", error);
-        } finally {
-            setIsLoadingMessages(false);
+        } else {
+            setMessages([]);
         }
-    };
+    }, [messagesResponse, activeConversation, currentUser]);
 
     // Refetch functions
-    const refetchConversations = () => fetchConversations();
+    const refetchConversations = () => refetchConversationsQuery();
     const refetchMessages = () => {
         if (activeConversation) {
-            fetchMessages(activeConversation);
+            refetchMessagesQuery();
         }
     };
 
@@ -294,14 +297,14 @@ export default function MessagesPage() {
     // Initial load
     useEffect(() => {
         if (isAuthenticated) {
-            fetchConversations();
+            refetchConversations();
         }
     }, [isAuthenticated]);
 
     // Load messages when active conversation changes
     useEffect(() => {
         if (activeConversation) {
-            fetchMessages(activeConversation);
+            refetchMessages();
         }
     }, [activeConversation]);
 
