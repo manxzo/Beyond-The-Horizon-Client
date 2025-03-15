@@ -5,6 +5,7 @@ import { title, subtitle } from "@/components/primitives";
 import DefaultLayout from "@/layouts/default";
 import { useUser } from '../hooks/useUser';
 import { getLocalTimeZone, today, CalendarDate, parseDate } from "@internationalized/date";
+
 const Login: React.FC = () => {
     const navigate = useNavigate();
     const {
@@ -46,8 +47,6 @@ const Login: React.FC = () => {
             passwordErrors.push("Password must include at least 1 special character");
         }
     }
-
-
 
     // Validate date of birth
     useEffect(() => {
@@ -125,7 +124,6 @@ const Login: React.FC = () => {
             return;
         }
 
-
         // Convert CalendarDate to string format for the API
         const dobString = dob.toString();
 
@@ -171,7 +169,6 @@ const Login: React.FC = () => {
                                         <Input
                                             isRequired
                                             label="Username"
-
                                             name="username"
                                             placeholder="Enter your username"
                                             value={username}
@@ -181,7 +178,6 @@ const Login: React.FC = () => {
                                         <Input
                                             isRequired
                                             label="Password"
-
                                             name="password"
                                             type="password"
                                             placeholder="Enter your password"
@@ -266,7 +262,7 @@ const Login: React.FC = () => {
 
                                         <DateInput
                                             isRequired
-                                            label="Date of Birth"                                            
+                                            label="Date of Birth"
                                             name="dob"
                                             value={dob}
                                             onChange={setDob}

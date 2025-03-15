@@ -4,9 +4,6 @@ import { jwtDecode } from "jwt-decode";
 // Get the API URL from environment variables or use a default
 const API_URL = import.meta.env.VITE_SERVER_URL || 'https://bth-server-ywjx.shuttle.app';
 
-// Log the API URL for debugging
-console.log('API URL:', API_URL);
-
 // Define the JWT payload interface
 interface JwtPayload {
     id: string;
@@ -33,7 +30,6 @@ const tokenManager = {
             const currentTime = Date.now() / 1000;
             return decoded.exp < currentTime;
         } catch (e) {
-            console.error('Error checking token expiration:', e);
             return true;
         }
     },
@@ -44,7 +40,6 @@ const tokenManager = {
         try {
             return jwtDecode<JwtPayload>(token);
         } catch (e) {
-            console.error('Error decoding token:', e);
             return null;
         }
     },
@@ -83,9 +78,6 @@ const api = axios.create({
 [publicApi, api].forEach(instance => {
     instance.interceptors.request.use(
         (config) => {
-            // Log outgoing requests for debugging
-            console.log(`Request: ${config.method?.toUpperCase()} ${config.url}`, config);
-
             // For protected routes, add the JWT token as a header
             if (instance === api) {
                 const token = tokenManager.getToken();
@@ -97,7 +89,6 @@ const api = axios.create({
             return config;
         },
         (error) => {
-            console.error('Request error:', error);
             return Promise.reject(error);
         }
     );
@@ -105,25 +96,11 @@ const api = axios.create({
     // Add response interceptors for both instances
     instance.interceptors.response.use(
         (response) => {
-            // Log successful responses for debugging
-            console.log(`Response from ${response.config.url}:`, response.data);
             return response;
         },
         async (error: AxiosError) => {
-            // Enhanced error logging
-            console.error('API Error:', {
-                url: error.config?.url,
-                method: error.config?.method,
-                status: error.response?.status,
-                statusText: error.response?.statusText,
-                data: error.response?.data,
-                message: error.message
-            });
-
             // Handle session expiration or authentication errors
             if (error.response?.status === 401) {
-                console.error("Authentication error:", error.response?.data);
-
                 // Try to refresh the session if token is expired
                 if (tokenManager.getToken() &&
                     tokenManager.isTokenExpired() &&
@@ -143,7 +120,6 @@ const api = axios.create({
                             return axios(originalRequest);
                         }
                     } catch (refreshError) {
-                        console.error("Failed to refresh token:", refreshError);
                         // Clear auth state on refresh failure
                         tokenManager.removeToken();
                         localStorage.removeItem('user');
@@ -211,11 +187,9 @@ export const authService = {
     // POST /api/public/auth/register
     register: async (userData: userSignupData): Promise<ApiResponse<any>> => {
         try {
-            console.log('Registering user:', userData);
             const response = await publicApi.post("/api/public/auth/register", userData);
             return response;
         } catch (error) {
-            console.error('Registration error:', error);
             throw error;
         }
     },
@@ -226,7 +200,6 @@ export const authService = {
         password: string
     ): Promise<ApiResponse<any>> => {
         try {
-            console.log('Logging in user:', username);
             const response = await publicApi.post("/api/public/auth/login", {
                 username,
                 password,
@@ -239,7 +212,6 @@ export const authService = {
 
             return response;
         } catch (error) {
-            console.error('Login error:', error);
             throw error;
         }
     },
@@ -267,8 +239,6 @@ export const authService = {
 
             return response;
         } catch (error) {
-            console.error('Logout error:', error);
-
             // Always clear local storage even if the server request fails
             tokenManager.removeToken();
             localStorage.removeItem('user');
@@ -309,7 +279,6 @@ export const authService = {
             await api.get("/api/protected/users/info");
             return true;
         } catch (error) {
-            console.error('Auth check error:', error);
             return false;
         }
     }

@@ -79,12 +79,6 @@ const getReconnectAttempts = (): number => {
   return attempts ? parseInt(attempts, 10) : 0;
 };
 
-const incrementReconnectAttempts = (): number => {
-  const attempts = getReconnectAttempts() + 1;
-  sessionStorage.setItem('ws_reconnect_attempts', attempts.toString());
-  return attempts;
-};
-
 const resetReconnectAttempts = (): void => {
   sessionStorage.removeItem('ws_reconnect_attempts');
 };
@@ -617,7 +611,7 @@ export function useWebSocket(options: WebSocketOptions = {}) {
     throw new Error('useWebSocket must be used within a WebSocketProvider');
   }
 
-  const { onOpen, onClose, onError, onMessage } = options;
+  const { onOpen, onMessage } = options;
 
   // Register message listener if onMessage is provided
   useEffect(() => {

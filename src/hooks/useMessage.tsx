@@ -1,16 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { messageService, ApiResponse } from '../services/services';
-import { useWebSocket, WebSocketMessageType } from './useWebSocket';
+import { useWebSocket } from './useWebSocket';
 
 export function useMessage() {
     const queryClient = useQueryClient();
+    const { sendMessage: sendWsMessage } = useWebSocket();
 
     const QUERY_KEYS = {
         conversations: ['conversations'],
         messages: (username: string) => ['messages', username],
     };
 
-    // Define interfaces to match server types
+    // Define interfaces for request payloads
     interface SendMessageRequest {
         receiverUsername: string;
         content: string;
@@ -21,12 +22,83 @@ export function useMessage() {
         reason: string;
     }
 
-    // Get the WebSocket connection
-    const { sendMessage: sendWsMessage } = useWebSocket();
+    // Send a message mutation
+    const sendMessageMutation = useMutation({
+        mutationFn: async ({ receiverUsername, content }: { receiverUsername: string; content: string }) => {
+            const response = await messageService.sendMessage(receiverUsername, content);
+            return response.data;
+        },
+        onSuccess: (_, variables) => {
+            // Invalidate the messages query for this conversation
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.receiverUsername) });
+            // Also invalidate the conversations list
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
 
-    /**
-     * Get all conversations for the current user
-     */
+            // Send a WebSocket message to notify the recipient
+            sendWsMessage('new_message', {
+                receiver_username: variables.receiverUsername,
+                content: variables.content
+            });
+        },
+    });
+
+    // Mark a message as seen mutation
+    const markMessageSeenMutation = useMutation({
+        mutationFn: async ({ messageId }: { messageId: string; username: string }) => {
+            const response = await messageService.markMessageSeen(messageId);
+            return response.data;
+        },
+        onSuccess: (_, variables) => {
+            // Invalidate the messages query for this conversation
+            if ('username' in variables) {
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
+            }
+            // Also invalidate the conversations list
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
+        },
+    });
+
+    // Edit a message mutation
+    const editMessageMutation = useMutation({
+        mutationFn: async ({ messageId, content }: { messageId: string; content: string; username: string }) => {
+            const response = await messageService.editMessage(messageId, content);
+            return response.data;
+        },
+        onSuccess: (_, variables) => {
+            // Invalidate the messages query for this conversation
+            if ('username' in variables) {
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
+            }
+            // Also invalidate the conversations list
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
+        },
+    });
+
+    // Delete a message mutation
+    const deleteMessageMutation = useMutation({
+        mutationFn: async ({ messageId }: { messageId: string; username: string }) => {
+            const response = await messageService.deleteMessage(messageId);
+            return response.data;
+        },
+        onSuccess: (_, variables) => {
+            // Invalidate the messages query for this conversation
+            if ('username' in variables) {
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
+            }
+            // Also invalidate the conversations list
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
+        },
+    });
+
+    // Report a message mutation
+    const reportMessageMutation = useMutation({
+        mutationFn: async ({ messageId, reason }: { messageId: string; reason: string }) => {
+            const response = await messageService.reportMessage(messageId, reason);
+            return response.data;
+        },
+    });
+
+    // Get conversations query
     const getConversations = () => ({
         queryKey: QUERY_KEYS.conversations,
         queryFn: async () => {
@@ -34,12 +106,9 @@ export function useMessage() {
             return response;
         },
         select: (response: ApiResponse<any>) => response.data,
-        staleTime: 1 * 60 * 1000, // 1 minute
     });
 
-    /**
-     * Get messages for a specific conversation
-     */
+    // Get messages for a conversation query
     const getMessages = (username: string) => ({
         queryKey: QUERY_KEYS.messages(username),
         queryFn: async () => {
@@ -48,88 +117,6 @@ export function useMessage() {
         },
         select: (response: ApiResponse<any>) => response.data,
         enabled: !!username,
-        staleTime: 10 * 1000, // 10 seconds
-    });
-
-    /**
-     * Send a message to another user
-     */
-    const sendMessage = useMutation({
-        mutationFn: async ({ receiverUsername, content }: { receiverUsername: string; content: string }) => {
-            const response = await messageService.sendMessage(receiverUsername, content);
-            return response.data;
-        },
-        onSuccess: (data, variables) => {
-            // Invalidate queries to refresh the conversation
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.receiverUsername) });
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
-
-            // No need to send WebSocket message here as the server will handle it
-        },
-    });
-
-    /**
-     * Mark a message as seen
-     */
-    const markMessageSeen = useMutation({
-        mutationFn: async ({ messageId, username }: { messageId: string; username: string }) => {
-            const response = await messageService.markMessageSeen(messageId);
-            return response.data;
-        },
-        onSuccess: (data, variables) => {
-            // Invalidate queries to refresh the conversation
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
-
-            // No need to send WebSocket message here as the server will handle it
-        },
-    });
-
-    /**
-     * Edit a message
-     */
-    const editMessage = useMutation({
-        mutationFn: async ({ messageId, content, username }: { messageId: string; content: string; username: string }) => {
-            const response = await messageService.editMessage(messageId, content);
-            return response.data;
-        },
-        onSuccess: (data, variables) => {
-            // Invalidate queries to refresh the conversation
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
-
-            // No need to send WebSocket message here as the server will handle it
-        },
-    });
-
-    /**
-     * Delete a message
-     */
-    const deleteMessage = useMutation({
-        mutationFn: async ({ messageId, username }: { messageId: string; username: string }) => {
-            const response = await messageService.deleteMessage(messageId);
-            return response.data;
-        },
-        onSuccess: (data, variables) => {
-            // Invalidate queries to refresh the conversation
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
-
-            // No need to send WebSocket message here as the server will handle it
-        },
-    });
-
-    /**
-     * Report a message
-     */
-    const reportMessageMutation = useMutation({
-        mutationFn: async ({
-            messageId,
-            reason
-        }: {
-            messageId: string;
-            reason: string
-        }) => {
-            const response = await messageService.reportMessage(messageId, reason);
-            return response.data;
-        },
     });
 
     return {
@@ -138,20 +125,21 @@ export function useMessage() {
         getMessages,
 
         // Mutations
-        sendMessage: sendMessage.mutate,
-        isSendingMessage: sendMessage.isPending,
-        sendMessageError: sendMessage.error,
+        sendMessage: sendMessageMutation.mutate,
+        isSendingMessage: sendMessageMutation.isPending,
+        sendMessageError: sendMessageMutation.error,
 
-        markMessageSeen: markMessageSeen.mutate,
-        isMarkingMessageSeen: markMessageSeen.isPending,
+        markMessageSeen: markMessageSeenMutation.mutate,
+        isMarkingMessageSeen: markMessageSeenMutation.isPending,
+        markMessageSeenError: markMessageSeenMutation.error,
 
-        editMessage: editMessage.mutate,
-        isEditingMessage: editMessage.isPending,
-        editMessageError: editMessage.error,
+        editMessage: editMessageMutation.mutate,
+        isEditingMessage: editMessageMutation.isPending,
+        editMessageError: editMessageMutation.error,
 
-        deleteMessage: deleteMessage.mutate,
-        isDeletingMessage: deleteMessage.isPending,
-        deleteMessageError: deleteMessage.error,
+        deleteMessage: deleteMessageMutation.mutate,
+        isDeletingMessage: deleteMessageMutation.isPending,
+        deleteMessageError: deleteMessageMutation.error,
 
         reportMessage: reportMessageMutation.mutate,
         isReportingMessage: reportMessageMutation.isPending,

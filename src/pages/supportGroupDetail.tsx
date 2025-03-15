@@ -15,13 +15,12 @@ import {
     Avatar,
     addToast
 } from '@heroui/react';
-import { useSupportGroup, SupportGroupDetails } from '../hooks/useSupportGroup';
+import { useSupportGroup } from '../hooks/useSupportGroup';
 import { useMeeting } from '../hooks/useMeeting';
 import { useUser } from '../hooks/useUser';
 import DefaultLayout from '@/layouts/default';
 import { title, subtitle } from '@/components/primitives';
 import { format } from 'date-fns';
-import { ApiResponse } from '../services/services';
 
 // Interfaces to match server data structures
 interface SupportGroupMember {
@@ -31,32 +30,6 @@ interface SupportGroupMember {
     username?: string; // Added from user data
     avatar_url?: string; // Added from user data
     role?: string; // Added from user data
-}
-
-interface GroupMeeting {
-    meeting_id: string;
-    group_chat_id: string | null;
-    support_group_id: string;
-    host_id: string;
-    title: string;
-    description: string | null;
-    scheduled_time: string;
-    status: 'upcoming' | 'ongoing' | 'ended';
-    participant_count?: number; // Added for UI
-    is_participant?: boolean; // Added for UI
-}
-
-interface SponsorInfo {
-    user_id: string;
-    username: string;
-    avatar_url: string;
-    role: string;
-}
-
-interface GroupChat {
-    group_chat_id: string;
-    created_at: string;
-    creator_id: string;
 }
 
 const SupportGroupDetail = () => {
@@ -106,6 +79,14 @@ const SupportGroupDetail = () => {
         ...getGroupMeetings(groupId || '')
     });
 
+    // Refetch data when component mounts or groupId changes
+    useEffect(() => {
+        if (groupId) {
+            refetchGroup();
+            refetchMeetings();
+        }
+    }, [groupId, refetchGroup, refetchMeetings]);
+
     // Extract data from responses
     const groupDetails = groupDetailsResponse?.data;
     const meetings = meetingsResponse?.data || [];
@@ -116,6 +97,8 @@ const SupportGroupDetail = () => {
 
     // Determine user's relationship to the group
     const isMember = groupDetails?.is_member || false;
+
+    // Check if user is an admin (used for conditional rendering in the UI)
     const isAdmin = currentUser?.role === 'admin' || groupDetails?.is_admin;
 
     // Handle joining a support group
@@ -335,6 +318,15 @@ const SupportGroupDetail = () => {
                                         onPress={() => setShowNewMeetingForm(!showNewMeetingForm)}
                                     >
                                         {showNewMeetingForm ? 'Cancel' : 'Schedule Meeting'}
+                                    </Button>
+                                )}
+                                {/* Admin can also schedule meetings even if not a member */}
+                                {!isMember && isAdmin && (
+                                    <Button
+                                        color="primary"
+                                        onPress={() => setShowNewMeetingForm(!showNewMeetingForm)}
+                                    >
+                                        {showNewMeetingForm ? 'Cancel' : 'Schedule Meeting (Admin)'}
                                     </Button>
                                 )}
                             </div>

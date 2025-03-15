@@ -1,10 +1,9 @@
-import React, { useState, useRef, ChangeEvent } from 'react';
+import React, { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { useUser } from '../hooks/useUser';
 import {
     Button,
     Card,
     CardBody,
-    CardFooter,
     Input,
     Textarea,
     Avatar,
@@ -15,7 +14,7 @@ import {
     Alert,
     addToast
 } from "@heroui/react";
-import { title, subtitle } from "@/components/primitives";
+import { title } from "@/components/primitives";
 import DefaultLayout from "@/layouts/default";
 import {
     SunFilledIcon,
@@ -31,6 +30,7 @@ const Profile = () => {
         currentUser,
         isLoadingUser,
         isAuthenticated,
+        refetchUser,
         updateProfile,
         isUpdatingProfile,
         updateProfileError,
@@ -42,6 +42,11 @@ const Profile = () => {
         deleteAccount,
         isDeletingAccount,
     } = useUser();
+
+    // Refetch user data when component mounts
+    useEffect(() => {
+        refetchUser();
+    }, [refetchUser]);
 
     const [editMode, setEditMode] = useState(false);
     const [profileData, setProfileData] = useState({

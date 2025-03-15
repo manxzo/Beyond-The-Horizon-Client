@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
 import { Button, Card, CardBody, CardFooter } from "@heroui/react";
@@ -7,7 +7,12 @@ import DefaultLayout from "@/layouts/default";
 
 const Home: React.FC = () => {
     const navigate = useNavigate();
-    const { currentUser, isLoadingUser, isCheckingAuth } = useUser();
+    const { currentUser, isLoadingUser, isCheckingAuth, refetchUser } = useUser();
+
+    // Refetch user data when component mounts
+    useEffect(() => {
+        refetchUser();
+    }, [refetchUser]);
 
     if (isLoadingUser || isCheckingAuth) {
         return (

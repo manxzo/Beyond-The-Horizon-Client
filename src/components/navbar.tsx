@@ -23,7 +23,6 @@ import { Logo } from "@/components/icons";
 import { useUser } from "@/hooks/useUser";
 import { useState } from "react";
 
-
 // Helper component for dropdown navigation
 const NavDropdown = ({
   label,
@@ -105,26 +104,6 @@ const FeedIcon = (props: any) => (
   >
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-);
-
-const ResourcesIcon = (props: any) => (
-  <svg
-    aria-hidden="true"
-    fill="none"
-    focusable="false"
-    height="1em"
-    role="presentation"
-    stroke="currentColor"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    strokeWidth="1.5"
-    viewBox="0 0 24 24"
-    width="1em"
-    {...props}
-  >
-    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
   </svg>
 );
 

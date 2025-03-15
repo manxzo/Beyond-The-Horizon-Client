@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { authService, userService, userSignupData, tokenManager, ApiResponse } from '../services/services';
+import { authService, userService, userSignupData, tokenManager } from '../services/services';
 import { useState, useEffect } from 'react';
 import { useWebSocket } from './useWebSocket';
 
@@ -9,7 +9,7 @@ export function useUser() {
     const navigate = useNavigate();
     const [storedUser, setStoredUser] = useState<any>(null);
     const [isInitialized, setIsInitialized] = useState(false);
-    const { connect: connectWebSocket, disconnect: disconnectWebSocket, setReconnectAttempts, resetConnectionState } = useWebSocket();
+    const { connect: connectWebSocket, disconnect: disconnectWebSocket, resetConnectionState } = useWebSocket();
 
     const QUERY_KEYS = {
         currentUser: ['currentUser'],

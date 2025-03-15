@@ -20,12 +20,11 @@ import {
     ModalHeader,
     ModalBody,
     ModalFooter,
-    useDisclosure,
+    useDisclosure
 } from "@heroui/react";
 import { useUser } from "@/hooks/useUser";
 import { useMessage } from "@/hooks/useMessage";
 import { useWebSocket, WebSocketMessage, WebSocketMessageType } from "@/hooks/useWebSocket";
-import { useReport } from "@/hooks/useReport";
 import DefaultLayout from "@/layouts/default";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
@@ -37,7 +36,7 @@ import {
     Edit as EditIcon,
     Trash as TrashIcon,
     Flag as FlagIcon,
-    Check as CheckIcon,
+    Check as CheckIcon
 } from "lucide-react";
 
 // Message interface
@@ -63,7 +62,7 @@ interface Conversation {
 // Define a type that includes all possible message types
 type MessageType = WebSocketMessageType | string;
 
-export default function MessagesPage() {
+const Messages = () => {
     const { username } = useParams<{ username?: string }>();
     const navigate = useNavigate();
     const { currentUser, isAuthenticated, isCheckingAuth } = useUser();
@@ -76,8 +75,8 @@ export default function MessagesPage() {
         deleteMessage,
         reportMessage,
     } = useMessage();
-    const { createReport } = useReport();
-    const { isConnected, sendMessage: sendWsMessage } = useWebSocket({
+
+    const { isConnected } = useWebSocket({
         onMessage: (message: WebSocketMessage) => {
             // Use type assertion to handle all message types
             const messageType = message.type as MessageType;
@@ -142,25 +141,35 @@ export default function MessagesPage() {
         onClose: closeReportModal,
     } = useDisclosure();
 
-    // Use React Query for conversations
+    // Fetch conversations
     const {
         data: conversationsResponse,
         isLoading: isLoadingConversations,
-        refetch: refetchConversationsQuery
+        refetch: refetchConversations
     } = useQuery({
         ...getConversations(),
         enabled: isAuthenticated
     });
 
-    // Use React Query for messages when there's an active conversation
+    // Fetch messages for the selected conversation
     const {
         data: messagesResponse,
         isLoading: isLoadingMessages,
-        refetch: refetchMessagesQuery
+        refetch: refetchMessages
     } = useQuery({
         ...getMessages(activeConversation || ''),
         enabled: !!activeConversation && isAuthenticated
     });
+
+    // Refetch data when component mounts or when username changes
+    useEffect(() => {
+        if (isAuthenticated) {
+            refetchConversations();
+            if (activeConversation) {
+                refetchMessages();
+            }
+        }
+    }, [refetchConversations, refetchMessages, activeConversation, isAuthenticated]);
 
     // Process conversations data
     useEffect(() => {
@@ -192,14 +201,6 @@ export default function MessagesPage() {
             setMessages([]);
         }
     }, [messagesResponse, activeConversation, currentUser]);
-
-    // Refetch functions
-    const refetchConversations = () => refetchConversationsQuery();
-    const refetchMessages = () => {
-        if (activeConversation) {
-            refetchMessagesQuery();
-        }
-    };
 
     // Handle sending a message
     const handleSendMessage = async () => {
@@ -657,3 +658,5 @@ export default function MessagesPage() {
         </DefaultLayout>
     );
 }
+
+export default Messages;

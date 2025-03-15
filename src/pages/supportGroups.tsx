@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, UseQueryOptions } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
     Button,
     Card,
@@ -21,14 +21,11 @@ import {
     Tab
 } from '@heroui/react';
 import { useSupportGroup, SupportGroupSummary, UserSupportGroup } from '../hooks/useSupportGroup';
-import { useUser } from '../hooks/useUser';
 import DefaultLayout from '@/layouts/default';
 import { title, subtitle } from '@/components/primitives';
-import { ApiResponse } from '../services/services';
 
 const SupportGroups = () => {
     const navigate = useNavigate();
-    const { currentUser } = useUser();
     const {
         getSupportGroups,
         getMyGroups,
@@ -65,6 +62,12 @@ const SupportGroups = () => {
         retry: false
     });
 
+    // Refetch data when component mounts or becomes visible
+    useEffect(() => {
+        refetchAllGroups();
+        refetchMyGroups();
+    }, [refetchAllGroups, refetchMyGroups]);
+
     // Extract data from responses
     const allGroups = allGroupsResponse?.data || [];
     const myGroups = myGroupsResponse?.data || [];
@@ -78,11 +81,6 @@ const SupportGroups = () => {
     }));
 
     const processedMyGroups: UserSupportGroup[] = myGroups || [];
-
-    // For debugging - log the API response
-    console.log('All groups response:', allGroupsResponse);
-    console.log('All groups data:', allGroups);
-    console.log('Processed groups:', processedAllGroups);
 
     // Handle suggesting a new support group
     const handleSuggestGroup = (e: React.FormEvent<HTMLFormElement>) => {
