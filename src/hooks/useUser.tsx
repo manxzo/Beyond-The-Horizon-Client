@@ -1,46 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { authService, userService, userSignupData, tokenManager } from '../services/services';
-import axios from 'axios';
 import { useState, useEffect } from 'react';
+import { useWebSocket } from './useWebSocket';
 
-/**
- * Custom hook for managing user authentication and profile data
- * 
- * === TanStack Query vs useState Approach ===
- * 
- * Traditional useState approach would require:
- * 1. Multiple useState hooks for user data, loading states, and errors
- * 2. useEffect hooks to fetch data and handle side effects
- * 3. Manual refetching logic and cache invalidation
- * 4. Custom error handling for each API call
- * 
- * TanStack Query advantages:
- * 1. Automatic caching of query results
- * 2. Built-in loading and error states
- * 3. Automatic refetching on window focus, network reconnection
- * 4. Deduplication of requests
- * 5. Background updates that don't block the UI
- * 6. Optimistic updates for mutations
- * 7. Query invalidation to keep data fresh
- */
 export function useUser() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const [storedUser, setStoredUser] = useState<any>(null);
     const [isInitialized, setIsInitialized] = useState(false);
+    const { connect: connectWebSocket, disconnect: disconnectWebSocket } = useWebSocket();
 
-    // Query key constants for better organization and consistency
-    // These keys are used for caching and invalidation
     const QUERY_KEYS = {
         currentUser: ['currentUser'],
         userProfile: (username: string) => ['userProfile', username],
         authStatus: ['authStatus'],
     };
 
-    /**
-     * Check authentication status - both cookie and token
-     */
     const {
         data: authStatus,
         isLoading: isCheckingAuth,
@@ -49,10 +25,10 @@ export function useUser() {
         queryKey: QUERY_KEYS.authStatus,
         queryFn: async () => {
             try {
+                // Return the response directly, not response.data
                 return await authService.checkAuth();
             } catch (error) {
                 console.error('Error checking auth status:', error);
-                // Return false instead of letting the error propagate
                 return false;
             }
         },
@@ -60,7 +36,7 @@ export function useUser() {
         retry: false,
         // Only run this query if we have a token
         enabled: !!tokenManager.getToken() && isInitialized,
-        refetchOnWindowFocus: false, // Prevent refetching on window focus
+        refetchOnWindowFocus: false,
     });
 
     /**
@@ -75,18 +51,8 @@ export function useUser() {
     } = useQuery({
         queryKey: QUERY_KEYS.currentUser,
         queryFn: async () => {
-            try {
-                const response = await userService.getCurrentUser();
-                return response.data || null;
-            } catch (error) {
-                console.error('Error fetching current user:', error);
-                if (axios.isAxiosError(error) && error.response?.status === 401) {
-                    localStorage.removeItem('user');
-                    tokenManager.removeToken();
-                    setStoredUser(null);
-                }
-                return null;
-            }
+            // Return the response directly, not response.data
+            return await userService.getCurrentUser();
         },
         enabled: !!authStatus && isInitialized,
         refetchOnWindowFocus: false,
@@ -99,7 +65,12 @@ export function useUser() {
         const user = localStorage.getItem('user');
         if (user) {
             try {
-                setStoredUser(JSON.parse(user));
+                const parsedUser = JSON.parse(user);
+                console.log('Loaded stored user:', parsedUser);
+                setStoredUser(parsedUser);
+
+                // Pre-populate the query cache with the stored user
+                queryClient.setQueryData(QUERY_KEYS.currentUser, parsedUser);
             } catch (e) {
                 console.error('Error parsing stored user:', e);
                 localStorage.removeItem('user');
@@ -111,11 +82,17 @@ export function useUser() {
         if (token && tokenManager.isTokenExpired()) {
             console.log('Token is expired, attempting to refresh');
             authService.refreshSession()
+                .then(() => {
+                    // After successful refresh, force refetch user data
+                    recheckAuth();
+                    refetchUser();
+                })
                 .catch(() => {
                     console.log('Failed to refresh token, clearing auth state');
                     localStorage.removeItem('user');
                     tokenManager.removeToken();
                     setStoredUser(null);
+                    queryClient.setQueryData(QUERY_KEYS.currentUser, null);
                 })
                 .finally(() => {
                     setIsInitialized(true);
@@ -123,48 +100,77 @@ export function useUser() {
         } else {
             setIsInitialized(true);
         }
-    }, []);
+    }, [queryClient, recheckAuth, refetchUser]);
+
+    // Make sure we're using the most up-to-date user data
+    const userData = currentUser || storedUser;
+
+    // Log the current state for debugging
+    useEffect(() => {
+        console.log('Current user state:', { currentUser, storedUser, userData, isAuthenticated: !!authStatus && !!userData });
+    }, [currentUser, storedUser, authStatus]);
 
     /**
      * Check if the user is authenticated
      */
-    const isAuthenticated = !!authStatus && (!!currentUser || !!storedUser);
+    const isAuthenticated = !!authStatus && !!userData;
 
     /**
-     * Login mutation - handles user login and updates the current user data
+     * Login mutation - handles user login and updates the current user data.
      * 
-     * With useState approach, you would need:
-     * - useState for loading and error states
-     * - Custom function to call the API and update state
-     * - Manual error handling
-     * - Manual cache invalidation
-     * 
-     * TanStack Query's useMutation provides:
-     * - Loading and error states
-     * - Automatic error handling
-     * - Callbacks for success/error/settlement
-     * - Integration with the query cache
+     * This version has been adjusted to always fetch and save the full user data.
      */
     const loginMutation = useMutation({
         mutationFn: async ({ username, password }: { username: string; password: string }) => {
             try {
                 console.log('Login mutation called with:', username);
-                return await authService.login(username, password);
+                const authResponse = await authService.login(username, password);
+                console.log('Login auth response:', authResponse);
+
+                if (authResponse && 'token' in authResponse) {
+                    // Set the token so the next request can use it
+                    tokenManager.setToken(authResponse.token as string);
+
+                    // Connect to WebSocket after successful login
+                    connectWebSocket();
+
+                    try {
+                        // Fetch the complete user profile after login
+                        const userProfileResponse = await userService.getCurrentUser();
+                        console.log('User profile after login:', userProfileResponse);
+
+                        // Combine the full profile data with the token
+                        const completeUserData = {
+                            ...userProfileResponse,
+                            token: authResponse.token
+                        };
+
+                        return completeUserData;
+                    } catch (profileError) {
+                        console.error('Error fetching profile after login:', profileError);
+                        // Fallback: return the auth response if profile fetch fails
+                        return authResponse;
+                    }
+                }
+
+                return authResponse;
             } catch (error) {
                 console.error('Login mutation error:', error);
                 throw error;
             }
         },
         onSuccess: (data) => {
-            console.log('Login successful, storing user data');
+            console.log('Login successful, storing complete user data:', data);
 
-            // Store user data
+            // Save complete user data to localStorage and update state
             localStorage.setItem('user', JSON.stringify(data));
             setStoredUser(data);
 
-            // Refresh auth status and user data
+            // Update the query cache with the complete user data
+            queryClient.setQueryData(QUERY_KEYS.currentUser, data);
+
+            // Refresh auth status
             recheckAuth();
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
 
             // Redirect to home page after successful login
             navigate('/');
@@ -189,9 +195,6 @@ export function useUser() {
 
     /**
      * Logout mutation - handles user logout
-     * 
-     * Note how we use queryClient.setQueryData to immediately update the cache
-     * This provides an optimistic UI update before the server confirms the logout
      */
     const logoutMutation = useMutation({
         mutationFn: async () => {
@@ -202,6 +205,9 @@ export function useUser() {
             tokenManager.removeToken();
             setStoredUser(null);
 
+            // Disconnect WebSocket on logout
+            disconnectWebSocket();
+
             queryClient.setQueryData(QUERY_KEYS.currentUser, null);
             queryClient.setQueryData(QUERY_KEYS.authStatus, false);
 
@@ -211,16 +217,21 @@ export function useUser() {
 
     /**
      * Update profile mutation - handles updating user profile information
-     * 
-     * After a successful update, we invalidate the currentUser query
-     * This ensures the UI shows the latest user data after an update
      */
     const updateProfileMutation = useMutation({
-        mutationFn: async (userData: any) => {
-            return await userService.updateProfile(userData);
+        mutationFn: async (profileData: {
+            user_profile?: string;
+            bio?: string;
+            location?: any;
+            interests?: string[];
+            experience?: string[];
+            available_days?: string[];
+            languages?: string[];
+            privacy?: boolean;
+        }) => {
+            return await userService.updateProfile(profileData);
         },
         onSuccess: () => {
-            // After successful profile update, refetch the current user data
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
         },
     });
@@ -233,7 +244,6 @@ export function useUser() {
             return await userService.updateAvatar(file);
         },
         onSuccess: () => {
-            // After successful avatar update, refetch the current user data
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
         },
     });
@@ -246,78 +256,84 @@ export function useUser() {
             return await userService.resetAvatar();
         },
         onSuccess: () => {
-            // After successful avatar reset, refetch the current user data
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
         },
     });
 
     /**
      * Delete account mutation - handles user account deletion
-     * 
-     * After account deletion, we clear the entire query cache
-     * This ensures no stale data remains for the deleted account
      */
     const deleteAccountMutation = useMutation({
         mutationFn: async () => {
             return await userService.deleteAccount();
         },
         onSuccess: () => {
-            // After successful account deletion, clear all queries and navigate to home
             queryClient.clear();
             navigate('/');
         },
     });
 
     /**
-     * Fetch a user profile by username
-     * 
-     * This is a function that returns a query configuration object,
-     * not a hook itself. This pattern allows components to use the
-     * configuration with useQuery while respecting the Rules of Hooks.
-     * 
-     * Usage in a component:
-     * const { getUserProfile } = useUser();
-     * const { data: profile } = useQuery(getUserProfile('username'));
+     * Fetch a user profile by username - returns a query configuration
      */
     const getUserProfile = (username: string) => {
-        // Create the query configuration
         const queryConfig = {
             queryKey: QUERY_KEYS.userProfile(username),
             queryFn: async () => {
-                const response = await userService.getUserByName(username);
-                return response.data;
+                // Return the response directly, not response.data
+                return await userService.getUserByName(username);
             },
-            // Enable the query only if a username is provided
             enabled: !!username,
         };
 
-        // Return the query configuration for use with useQuery
         return queryConfig;
     };
 
     /**
      * Refresh the user's authentication session
-     * 
-     * This is a manual function that refreshes the auth token
-     * and then invalidates the currentUser query to update the UI
      */
     const refreshSession = async () => {
         try {
             const result = await authService.refreshSession();
+            console.log('Token refresh result:', result);
+
+            const userResponse = await userService.getCurrentUser();
+            console.log('User data after token refresh:', userResponse);
+
+            if (userResponse) {
+                const token = tokenManager.getToken();
+                const completeUserData = {
+                    ...userResponse,
+                    token
+                };
+
+                localStorage.setItem('user', JSON.stringify(completeUserData));
+                setStoredUser(completeUserData);
+                queryClient.setQueryData(QUERY_KEYS.currentUser, completeUserData);
+            }
+
             recheckAuth();
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
-            console.log(result);
             return true;
         } catch (error) {
             console.error('Session refresh error:', error);
+            localStorage.removeItem('user');
+            tokenManager.removeToken();
+            setStoredUser(null);
+            queryClient.setQueryData(QUERY_KEYS.currentUser, null);
             return false;
         }
     };
 
-    // Return all the necessary functions and data for user management
+    // Connect to WebSocket if user is authenticated
+    useEffect(() => {
+        if (isAuthenticated && !isCheckingAuth) {
+            connectWebSocket();
+        }
+    }, [isAuthenticated, isCheckingAuth, connectWebSocket]);
+
+    // Return all functions and data for user management
     return {
-        // Current user state
-        currentUser,
+        currentUser: userData,
         isLoadingUser,
         isErrorUser,
         userError,
@@ -344,7 +360,20 @@ export function useUser() {
         isUpdatingProfile: updateProfileMutation.isPending,
         updateProfileError: updateProfileMutation.error,
 
-        updateAvatar: updateAvatarMutation.mutate,
+        updateAvatar: (file: File, options?: { onSuccess?: () => void, onError?: (error: any) => void }) => {
+            return updateAvatarMutation.mutate(file, {
+                onSuccess: () => {
+                    if (options?.onSuccess) {
+                        options.onSuccess();
+                    }
+                },
+                onError: (error) => {
+                    if (options?.onError) {
+                        options.onError(error);
+                    }
+                }
+            });
+        },
         isUpdatingAvatar: updateAvatarMutation.isPending,
         updateAvatarError: updateAvatarMutation.error,
 
@@ -354,37 +383,8 @@ export function useUser() {
         deleteAccount: deleteAccountMutation.mutate,
         isDeletingAccount: deleteAccountMutation.isPending,
 
-        // User profile fetching - returns a query config, not a direct useQuery call
+        // User profile fetching (query config)
         getUserProfile,
     };
 }
 
-/**
- * === USAGE EXAMPLES ===
- * 
- * // In a component:
- * const {
- *   currentUser,
- *   isAuthenticated,
- *   login,
- *   logout,
- *   isLoggingIn
- * } = useUser();
- * 
- * // Login
- * const handleLogin = () => {
- *   login({ username, password });
- * };
- * 
- * // Show loading state
- * if (isLoggingIn) {
- *   return <LoadingSpinner />;
- * }
- * 
- * // Conditional rendering based on auth state
- * return isAuthenticated ? <UserDashboard user={currentUser} /> : <LoginForm />;
- * 
- * // Fetching a user profile
- * const { getUserProfile } = useUser();
- * const { data: profile } = useQuery(getUserProfile('someUsername'));
- */

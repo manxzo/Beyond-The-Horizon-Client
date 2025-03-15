@@ -43,3 +43,4 @@ test-results
 .wallaby
 test/*
 src/test/*
+wallaby.cjs

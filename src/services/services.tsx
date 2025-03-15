@@ -343,6 +343,10 @@ export const userService = {
         const formData = new FormData();
         formData.append("avatar", file);
 
+        // Log file details for debugging
+        console.log(`Uploading avatar: ${file.name}, size: ${file.size} bytes, type: ${file.type}`);
+
+        // Use a longer timeout for file uploads
         const response = await api.post(
             "/api/protected/users/avatar/upload",
             formData,
@@ -350,6 +354,13 @@ export const userService = {
                 headers: {
                     "Content-Type": "multipart/form-data",
                 },
+                timeout: 30000, // 30 seconds timeout for file uploads
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round(
+                        (progressEvent.loaded * 100) / (progressEvent.total || file.size)
+                    );
+                    console.log(`Upload progress: ${percentCompleted}%`);
+                }
             }
         );
         return response.data;
