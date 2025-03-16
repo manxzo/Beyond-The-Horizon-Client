@@ -4,11 +4,10 @@ import { getLocalTimeZone } from "@internationalized/date";
 export default function MessageBubble({
     message,
     isCurrentUser,
-    currentUser
+   
 }: {
     message: any;
     isCurrentUser: boolean;
-    currentUser: any;
 }) {
 
     const { useGetUserById } = useUser();

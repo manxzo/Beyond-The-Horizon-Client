@@ -106,14 +106,7 @@ export default function GroupChat() {
     }
   };
 
-  // Format date for display
-  const formatMessageTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+
 
   // Format date for message grouping
   const formatMessageDate = (dateString: string) => {
@@ -220,7 +213,6 @@ export default function GroupChat() {
                             key={message.group_chat_message_id}
                             message={message}
                             isCurrentUser={message.sender_id === currentUser?.user_id}
-                            currentUser={currentUser}
                           />
                         ))}
                       </div>

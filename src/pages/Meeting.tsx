@@ -31,18 +31,7 @@ import { useUser } from "../hooks/useUser";
 // Define meeting status types
 type MeetingStatus = 'upcoming' | 'ongoing' | 'ended';
 
-// Define meeting interface
-interface GroupMeeting {
-    meeting_id: string;
-    group_chat_id: string | null;
-    meeting_chat_id?: string | null;
-    support_group_id: string;
-    host_id: string;
-    title: string;
-    description: string | null;
-    scheduled_time: string;
-    status: MeetingStatus;
-}
+
 
 // Define participant interface
 interface MeetingParticipant {

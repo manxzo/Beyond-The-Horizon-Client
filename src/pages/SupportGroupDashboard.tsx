@@ -11,7 +11,6 @@ import {
     Button,
     Spinner,
     Divider,
-    Avatar,
     Badge,
     Chip,
     Modal,
