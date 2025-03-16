@@ -69,6 +69,7 @@ export default function Register() {
     }, [registerError]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setErrors({});
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -93,7 +94,6 @@ export default function Register() {
             dob?: string;
             terms?: string;
         } = {};
-
         // Username validation
         if (!formData.username.trim()) {
             newErrors.username = "Username is required";
@@ -157,7 +157,7 @@ export default function Register() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
+        
         if (validateForm()) {
             // Clear any previous errors
             setErrors({});

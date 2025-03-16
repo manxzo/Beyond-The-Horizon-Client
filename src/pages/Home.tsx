@@ -8,6 +8,7 @@ import {
     Divider,
     Image,
 } from "@heroui/react";
+import { Newspaper, Users, BookOpen } from "lucide-react";
 import { useUser } from "@/hooks/useUser";
 import DefaultLayout from "@/layouts/default";
 
@@ -28,13 +29,9 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="p-4">
                     <CardHeader className="flex gap-3">
-                        <Image
-                            alt="Feed icon"
-                            height={40}
-                            radius="sm"
-                            src="/icons/feed.svg"
-                            width={40}
-                        />
+                        <div className="p-2 rounded-md bg-primary/10 flex justify-center items-center">
+                            <Newspaper className="w-6 h-6 text-primary" />
+                        </div>
                         <div className="flex flex-col">
                             <p className="text-md font-semibold">Your Feed</p>
                             <p className="text-small text-default-500">Latest updates and posts</p>
@@ -49,7 +46,7 @@ export default function Home() {
                         <Button
                             color="primary"
                             variant="flat"
-                            onClick={() => navigate("/feed")}
+                            onPress={() => navigate("/feed")}
                             fullWidth
                         >
                             Go to Feed
@@ -59,13 +56,9 @@ export default function Home() {
 
                 <Card className="p-4">
                     <CardHeader className="flex gap-3">
-                        <Image
-                            alt="Groups icon"
-                            height={40}
-                            radius="sm"
-                            src="/icons/groups.svg"
-                            width={40}
-                        />
+                        <div className="p-2 rounded-md bg-primary/10 flex justify-center items-center">
+                            <Users className="w-6 h-6 text-primary" />
+                        </div>
                         <div className="flex flex-col">
                             <p className="text-md font-semibold">Support Groups</p>
                             <p className="text-small text-default-500">Connect with others</p>
@@ -80,7 +73,7 @@ export default function Home() {
                         <Button
                             color="primary"
                             variant="flat"
-                            onClick={() => navigate("/support-groups")}
+                            onPress={() => navigate("/support-groups")}
                             fullWidth
                         >
                             View Groups
@@ -90,13 +83,9 @@ export default function Home() {
 
                 <Card className="p-4">
                     <CardHeader className="flex gap-3">
-                        <Image
-                            alt="Resources icon"
-                            height={40}
-                            radius="sm"
-                            src="/icons/resources.svg"
-                            width={40}
-                        />
+                        <div className="p-2 rounded-md bg-primary/10 flex justify-center items-center">
+                            <BookOpen className="w-6 h-6 text-primary" />
+                        </div>
                         <div className="flex flex-col">
                             <p className="text-md font-semibold">Resources</p>
                             <p className="text-small text-default-500">Helpful materials</p>
@@ -111,7 +100,7 @@ export default function Home() {
                         <Button
                             color="primary"
                             variant="flat"
-                            onClick={() => navigate("/resources")}
+                            onPress={() => navigate("/resources")}
                             fullWidth
                         >
                             Browse Resources

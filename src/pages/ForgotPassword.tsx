@@ -11,6 +11,7 @@ import {
     Link,
     Spinner
 } from "@heroui/react";
+import { CheckCircle } from "lucide-react";
 import DefaultLayout from "@/layouts/default";
 import { siteConfig } from "@/config/site";
 
@@ -35,7 +36,14 @@ export default function ForgotPassword() {
         setError("");
         setIsSubmitting(true);
 
-       
+        try {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            setIsSubmitted(true);
+        } catch (error) {
+            setError("An error occurred. Please try again.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -53,21 +61,7 @@ export default function ForgotPassword() {
                         {isSubmitted ? (
                             <div className="flex flex-col items-center gap-4 py-4">
                                 <div className="rounded-full bg-success/10 p-4">
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        width="32"
-                                        height="32"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        className="text-success"
-                                    >
-                                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                                    </svg>
+                                    <CheckCircle className="w-8 h-8 text-success" />
                                 </div>
                                 <h2 className="text-xl font-semibold">Check Your Email</h2>
                                 <p className="text-center text-default-500">

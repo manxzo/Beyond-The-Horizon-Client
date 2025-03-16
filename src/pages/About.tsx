@@ -6,6 +6,7 @@ import {
     Divider,
     Image,
 } from "@heroui/react";
+import { Users, MessageSquare, Edit } from "lucide-react";
 import DefaultLayout from "@/layouts/default";
 
 export default function About() {
@@ -63,12 +64,7 @@ export default function About() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="flex flex-col gap-4 items-center text-center">
                             <div className="rounded-full bg-primary/10 p-6 flex justify-center items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                                    <circle cx="9" cy="7" r="4"></circle>
-                                    <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
-                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                                </svg>
+                                <Users className="w-8 h-8 text-primary" />
                             </div>
                             <h3 className="text-xl font-semibold">Connect</h3>
                             <p className="text-default-500">
@@ -78,9 +74,7 @@ export default function About() {
 
                         <div className="flex flex-col gap-4 items-center text-center">
                             <div className="rounded-full bg-primary/10 p-6 flex justify-center items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                                </svg>
+                                <MessageSquare className="w-8 h-8 text-primary" />
                             </div>
                             <h3 className="text-xl font-semibold">Share</h3>
                             <p className="text-default-500">
@@ -90,10 +84,7 @@ export default function About() {
 
                         <div className="flex flex-col gap-4 items-center text-center">
                             <div className="rounded-full bg-primary/10 p-6 flex justify-center items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                                    <path d="M12 20h9"></path>
-                                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                                </svg>
+                                <Edit className="w-8 h-8 text-primary" />
                             </div>
                             <h3 className="text-xl font-semibold">Grow</h3>
                             <p className="text-default-500">

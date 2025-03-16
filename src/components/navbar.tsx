@@ -115,6 +115,7 @@ export const Navbar = () => {
 
         {/* Public navigation items - only shown when not authenticated */}
         {!isAuthenticated && siteConfig.navItems.public.map((item) => (
+          item.label === "Register" || item.label === "Login" ? null :
           <NavbarItem key={item.href}>
             <Link
               color="foreground"

@@ -34,11 +34,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     // Refs to store WebSocket instance and listeners
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<number | null>(null);
-    const reconnectAttemptsRef = useRef(0);
     const messageListenersRef = useRef<Map<string, Set<(payload: any) => void>>>(new Map());
+    const currentTokenRef = useRef<string | null>(tokenManager.getToken());
+    const intentionalCloseRef = useRef<boolean>(false);
 
     // Function to create a new WebSocket connection
-    const connectWebSocket = useCallback(() => {
+    const connectWebSocket = useCallback(async () => {
         // Clear any existing reconnect timeout
         if (reconnectTimeoutRef.current !== null) {
             window.clearTimeout(reconnectTimeoutRef.current);
@@ -52,48 +53,51 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             return;
         }
 
+        // Store the current token
+        currentTokenRef.current = token;
+
+        // If we already have an open connection, don't create a new one
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            console.log('WebSocket already connected, not creating a new connection');
+            return;
+        }
+
         // Close existing connection if any
         if (wsRef.current) {
+            intentionalCloseRef.current = true;
             wsRef.current.close();
         }
 
         try {
             // Get WebSocket URL and protocol from wsService
             const wsUrl = wsService.getWebSocketUrl();
-            const wsProtocol = wsService.getWebSocketProtocol();
 
-            // Create a new WebSocket connection with the token in the protocol
-            wsRef.current = new WebSocket(wsUrl, wsProtocol);
+            // Create a new WebSocket connection
+            wsRef.current = new WebSocket(wsUrl);
+            intentionalCloseRef.current = false;
 
             // Set up event handlers
             wsRef.current.onopen = () => {
                 console.log('WebSocket connection established');
                 setIsConnected(true);
                 setLastError(null);
-                reconnectAttemptsRef.current = 0; // Reset reconnect attempts on successful connection
             };
 
             wsRef.current.onclose = (event) => {
                 console.log(`WebSocket connection closed: ${event.code} ${event.reason}`);
                 setIsConnected(false);
 
-                // Attempt to reconnect after a delay, unless it was a normal closure
-                if (event.code !== 1000) {
-                    // Exponential backoff for reconnection attempts
-                    const delay = Math.min(5000 * Math.pow(1.5, reconnectAttemptsRef.current), 30000);
-                    reconnectAttemptsRef.current++;
+                // Only attempt to reconnect if:
+                // 1. It wasn't an intentional close
+                // 2. The token has changed since we last connected
+                if (!intentionalCloseRef.current &&
+                    tokenManager.getToken() &&
+                    tokenManager.getToken() !== currentTokenRef.current) {
 
-                    console.log(`Scheduling reconnect attempt ${reconnectAttemptsRef.current} in ${delay}ms`);
-
+                    console.log('Token has changed, reconnecting WebSocket');
                     reconnectTimeoutRef.current = window.setTimeout(() => {
-                        // Check if token is still valid before reconnecting
-                        if (tokenManager.getToken() && !tokenManager.isTokenExpired()) {
-                            console.log('Attempting to reconnect WebSocket...');
-                            connectWebSocket();
-                        } else {
-                            console.log('Token expired or missing, not reconnecting WebSocket');
-                        }
-                    }, delay);
+                        connectWebSocket();
+                    }, 1000);
                 }
             };
 
@@ -114,13 +118,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
                         console.log('WebSocket authentication successful');
                     } else if (type === 'error' && payload?.message?.includes('Not authenticated')) {
                         console.error('WebSocket authentication failed');
-                        // Try to refresh the token and reconnect
-                        tokenManager.canAttemptRefresh() && tokenManager.getToken() &&
+                        // Only try to refresh if the token has actually expired
+                        if (tokenManager.isTokenExpired() && tokenManager.canAttemptRefresh()) {
                             import('../services/services').then(({ authService }) => {
                                 authService.refreshSession().catch(() => {
                                     console.error('Failed to refresh session for WebSocket');
                                 });
                             });
+                        }
                     }
 
                     // Show toast notifications for certain message types
@@ -167,18 +172,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         } catch (err) {
             console.error('Error creating WebSocket connection:', err);
             setLastError('Failed to create WebSocket connection');
-
-            // Attempt to reconnect after a delay
-            const delay = Math.min(5000 * Math.pow(1.5, reconnectAttemptsRef.current), 30000);
-            reconnectAttemptsRef.current++;
-
-            reconnectTimeoutRef.current = window.setTimeout(() => {
-                // Check if token is still valid before reconnecting
-                if (tokenManager.getToken() && !tokenManager.isTokenExpired()) {
-                    console.log('Attempting to reconnect WebSocket...');
-                    connectWebSocket();
-                }
-            }, delay);
         }
     }, []);
 
@@ -192,14 +185,15 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             console.warn('Cannot send message, WebSocket is not connected');
             setLastError('Cannot send message, WebSocket is not connected');
 
-            // Try to reconnect if not connected
-            if (!isConnected && tokenManager.getToken() && !tokenManager.isTokenExpired()) {
+            // Only try to reconnect if the token has changed
+            const currentToken = tokenManager.getToken();
+            if (currentToken && currentToken !== currentTokenRef.current && !tokenManager.isTokenExpired()) {
                 connectWebSocket();
             }
 
             return false;
         }
-    }, [isConnected, connectWebSocket]);
+    }, [connectWebSocket]);
 
     // Function to add a message listener
     const addMessageListener = useCallback((type: string, callback: (payload: any) => void) => {
@@ -230,7 +224,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     // Connect when the component mounts and the user is authenticated
     useEffect(() => {
         // Check if the user is authenticated
-        const checkAuthAndConnect = () => {
+        const checkAuthAndConnect = async () => {
             const token = tokenManager.getToken();
             if (token && !tokenManager.isTokenExpired()) {
                 connectWebSocket();
@@ -243,13 +237,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         // Set up event listeners for authentication changes
         const handleStorageChange = (event: StorageEvent) => {
             if (event.key === 'auth_token') {
-                if (event.newValue) {
+                if (event.newValue && event.newValue !== currentTokenRef.current) {
                     // Token added or changed, try to connect
+                    currentTokenRef.current = event.newValue;
                     connectWebSocket();
-                } else {
+                } else if (!event.newValue) {
                     // Token removed, disconnect
                     if (wsRef.current) {
+                        intentionalCloseRef.current = true;
                         wsRef.current.close(1000, 'User logged out');
+                        currentTokenRef.current = null;
                     }
                 }
             }
@@ -258,39 +255,20 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         // Listen for storage events (for multi-tab support)
         window.addEventListener('storage', handleStorageChange);
 
-        // Set up a token refresh check interval
-        const tokenCheckInterval = setInterval(() => {
-            const token = tokenManager.getToken();
-
-            // If token exists but will expire soon, try to refresh it
-            if (token && tokenManager.willExpireSoon() && tokenManager.canAttemptRefresh()) {
-                import('../services/services').then(({ authService }) => {
-                    authService.refreshSession().catch(() => {
-                        console.error('Failed to refresh session for WebSocket');
-                    });
-                });
-            }
-
-            // If we have a token but no connection, try to connect
-            if (token && !tokenManager.isTokenExpired() && !isConnected && !wsRef.current) {
-                connectWebSocket();
-            }
-        }, 60000); // Check every minute
-
         // Clean up on unmount
         return () => {
             window.removeEventListener('storage', handleStorageChange);
-            clearInterval(tokenCheckInterval);
 
             if (reconnectTimeoutRef.current !== null) {
                 window.clearTimeout(reconnectTimeoutRef.current);
             }
 
             if (wsRef.current) {
+                intentionalCloseRef.current = true;
                 wsRef.current.close(1000, 'Component unmounted');
             }
         };
-    }, [connectWebSocket, isConnected]);
+    }, [connectWebSocket]);
 
     // The context value that will be provided
     const contextValue: WebSocketContextType = {

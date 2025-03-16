@@ -1073,23 +1073,23 @@ export const adminService = {
 export const wsService = {
     // Helper function to get the WebSocket URL with token
     getWebSocketUrl: (): string => {
-        const baseWsUrl = import.meta.env.VITE_WS_URL || 'wss://bth-server-ywjx.shuttle.app/ws/connect';
-        return baseWsUrl;
-    },
+        // Use the same base URL as the API to ensure cookies are sent
+        const baseUrl = API_URL.replace('http://', 'ws://').replace('https://', 'wss://');
 
-    // Helper function to get the WebSocket protocol with token
-    getWebSocketProtocol: (): string[] => {
+        // Get the token for authentication
         const token = tokenManager.getToken();
         if (!token) {
             throw new Error('No authentication token available');
         }
-        return [`token-${token}`];
+        return `${baseUrl}/api/protected/ws/connect?token=${token}`;
     },
 
-    // POST /ws/send-user - Send a message to a specific user
+  
+
+    // POST /api/protected/ws/send-user - Send a message to a specific user
     sendToUser: async (userId: string, payload: any): Promise<ApiResponse<any>> => {
         try {
-            const response = await api.post('/ws/send-user', {
+            const response = await api.post('/api/protected/ws/send-user', {
                 user_id: userId,
                 payload
             });
@@ -1099,10 +1099,10 @@ export const wsService = {
         }
     },
 
-    // POST /ws/send-users - Send a message to multiple users
+    // POST /api/protected/ws/send-users - Send a message to multiple users
     sendToUsers: async (userIds: string[], payload: any): Promise<ApiResponse<any>> => {
         try {
-            const response = await api.post('/ws/send-users', {
+            const response = await api.post('/api/protected/ws/send-users', {
                 user_ids: userIds,
                 payload
             });
@@ -1112,10 +1112,10 @@ export const wsService = {
         }
     },
 
-    // POST /ws/send-role - Send a message to all users with a specific role
+    // POST /api/protected/ws/send-role - Send a message to all users with a specific role
     sendToRole: async (role: string, payload: any): Promise<ApiResponse<any>> => {
         try {
-            const response = await api.post('/ws/send-role', {
+            const response = await api.post('/api/protected/ws/send-role', {
                 role,
                 payload
             });
@@ -1125,10 +1125,10 @@ export const wsService = {
         }
     },
 
-    // POST /ws/send-all - Send a message to all connected users
+    // POST /api/protected/ws/send-all - Send a message to all connected users
     sendToAll: async (payload: any): Promise<ApiResponse<any>> => {
         try {
-            const response = await api.post('/ws/send-all', {
+            const response = await api.post('/api/protected/ws/send-all', {
                 payload
             });
             return response;
