@@ -22,12 +22,7 @@ export function useAdminSponsor() {
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
-    // Define interfaces to match server types
-    interface ReviewSponsorApplicationRequest {
-        application_id: string;
-        status: string;
-        admin_comments?: string;
-    }
+
 
     /**
      * Review a sponsor application

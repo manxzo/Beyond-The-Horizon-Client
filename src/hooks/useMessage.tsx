@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { messageService, ApiResponse } from '../services/services';
+import { messageService } from '../services/services';
 
 export function useMessage() {
     const queryClient = useQueryClient();
@@ -64,16 +64,18 @@ export function useMessage() {
      * Route: PUT /api/protected/messages/{message_id}/seen
      */
     const useMarkMessageSeen = () => {
-        return useMutation({
-            mutationFn: async ({ messageId, username }: { messageId: string, username: string }) => {
+        return useMutation<any, Error, string, { username: string }>({
+            mutationFn: async (messageId: string) => {
                 const response = await messageService.markMessageSeen(messageId);
                 return response.data;
             },
-            onSuccess: (_, variables) => {
-                // Invalidate the messages query for this conversation
-                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
-                // Also invalidate the conversations list
-                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
+            onSuccess: (_, __, context) => {
+                if (context?.username) {
+                    // Invalidate the messages query for this conversation
+                    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(context.username) });
+                    // Also invalidate the conversations list
+                    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
+                }
             },
         });
     };
@@ -83,14 +85,16 @@ export function useMessage() {
      * Route: PUT /api/protected/messages/{message_id}/edit
      */
     const useEditMessage = () => {
-        return useMutation({
-            mutationFn: async ({ messageId, content, username }: { messageId: string, content: string, username: string }) => {
+        return useMutation<any, Error, { messageId: string, content: string }, { username: string }>({
+            mutationFn: async ({ messageId, content }) => {
                 const response = await messageService.editMessage(messageId, content);
                 return response.data;
             },
-            onSuccess: (_, variables) => {
-                // Invalidate the messages query for this conversation
-                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
+            onSuccess: (_, __, context) => {
+                if (context?.username) {
+                    // Invalidate the messages query for this conversation
+                    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(context.username) });
+                }
             },
         });
     };
@@ -100,16 +104,18 @@ export function useMessage() {
      * Route: DELETE /api/protected/messages/{message_id}
      */
     const useDeleteMessage = () => {
-        return useMutation({
-            mutationFn: async ({ messageId, username }: { messageId: string, username: string }) => {
+        return useMutation<any, Error, string, { username: string }>({
+            mutationFn: async (messageId: string) => {
                 const response = await messageService.deleteMessage(messageId);
                 return response.data;
             },
-            onSuccess: (_, variables) => {
-                // Invalidate the messages query for this conversation
-                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(variables.username) });
-                // Also invalidate the conversations list
-                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
+            onSuccess: (_, __, context) => {
+                if (context?.username) {
+                    // Invalidate the messages query for this conversation
+                    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(context.username) });
+                    // Also invalidate the conversations list
+                    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
+                }
             },
         });
     };

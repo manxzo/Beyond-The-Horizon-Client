@@ -22,12 +22,6 @@ export function useAdminReport() {
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
-    // Define interfaces to match server types
-    interface HandleReportRequest {
-        report_id: string;
-        action_taken: string;
-        resolved: boolean;
-    }
 
     /**
      * Handle a report

@@ -22,12 +22,7 @@ export function useAdminSupportGroup() {
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
-    // Define interfaces to match server types
-    interface ReviewSupportGroupRequest {
-        support_group_id: string;
-        status: string;
-        admin_comments?: string;
-    }
+
 
     /**
      * Review a support group

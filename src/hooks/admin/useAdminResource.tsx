@@ -22,12 +22,6 @@ export function useAdminResource() {
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
-    // Define interfaces to match server types
-    interface ReviewResourceRequest {
-        resource_id: string;
-        approved: boolean;
-        admin_comments?: string;
-    }
 
     /**
      * Review a resource

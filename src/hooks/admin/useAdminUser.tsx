@@ -22,16 +22,6 @@ export function useAdminUser() {
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
-    // Define interfaces to match server types
-    interface BanUserRequest {
-        user_id: string;
-        reason: string;
-        ban_duration_days?: number;
-    }
-
-    interface UnbanUserRequest {
-        user_id: string;
-    }
 
     /**
      * Ban a user
