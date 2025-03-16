@@ -9,6 +9,8 @@ import SupportGroupDashboard from "./pages/SupportGroupDashboard";
 import Meeting from "./pages/Meeting";
 import GroupChat from "./pages/GroupChat";
 import Feed from "./pages/Feed";
+import Profile from "./pages/Profile";
+import SponsorApplication from "./pages/SponsorApplication";
 import { useUser } from "./hooks/useUser";
 import { Spinner } from "@heroui/react";
 
@@ -49,6 +51,22 @@ function App() {
         element={
           <ProtectedRoute>
             <Feed />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/sponsor-application"
+        element={
+          <ProtectedRoute>
+            <SponsorApplication />
           </ProtectedRoute>
         }
       />

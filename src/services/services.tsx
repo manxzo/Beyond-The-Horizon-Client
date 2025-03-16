@@ -17,11 +17,11 @@ interface JwtPayload {
 
 // Create a secure token management utility
 const tokenManager = {
-    
+
     // Get token from storage and decrypt it
     getToken: (): string | null => {
         const token = localStorage.getItem('auth_token');
-        
+
 
         try {
             return token;
@@ -721,14 +721,36 @@ export const meetingService = {
             support_group_id: string;
         }
     ): Promise<any> => {
+        // Validate title length - must be at least 5 characters
+        if (meetingData.title.length < 5) {
+            throw new Error("Meeting title must be at least 5 characters long");
+        }
+
+        // Format the date to remove timezone information
+        // The server expects a NaiveDateTime format without timezone
+        const dateStr = meetingData.scheduled_time;
+        // Remove timezone information by taking only the part before '+' or before '['
+        let formattedDate = dateStr;
+        const plusIndex = dateStr.indexOf('+');
+        const bracketIndex = dateStr.indexOf('[');
+
+        if (plusIndex > 0) {
+            formattedDate = dateStr.substring(0, plusIndex);
+        } else if (bracketIndex > 0) {
+            formattedDate = dateStr.substring(0, bracketIndex);
+        }
+
+        const formattedData = {
+            ...meetingData,
+            scheduled_time: formattedDate.trim()
+        };
+
         const response = await api.post(
             `/api/protected/meetings/new`,
-            meetingData
+            formattedData
         );
         return response;
     },
-
-  
 
     // GET /api/protected/meetings/{meeting_id}
     getMeeting: async (meetingId: string): Promise<any> => {
