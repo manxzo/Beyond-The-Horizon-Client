@@ -417,9 +417,6 @@ export const userService = {
             "/api/protected/users/avatar/upload",
             formData,
             {
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
                 timeout: 30000, // 30 seconds timeout for file uploads
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round(
