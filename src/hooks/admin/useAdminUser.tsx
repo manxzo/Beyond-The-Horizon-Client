@@ -10,6 +10,7 @@ export function useAdminUser() {
 
     /**
      * Get all banned users
+     * Route: /api/admin/users/banned
      */
     const getBannedUsers = () => ({
         queryKey: QUERY_KEYS.bannedUsers,
@@ -34,6 +35,7 @@ export function useAdminUser() {
 
     /**
      * Ban a user
+     * Route: /api/admin/users/ban
      */
     const banUserMutation = useMutation({
         mutationFn: async ({
@@ -45,11 +47,6 @@ export function useAdminUser() {
             reason: string;
             banDurationDays?: number;
         }) => {
-            const payload: BanUserRequest = {
-                user_id: userId,
-                reason,
-                ban_duration_days: banDurationDays
-            };
             const response = await adminService.banUser(
                 userId,
                 reason,
@@ -66,10 +63,10 @@ export function useAdminUser() {
 
     /**
      * Unban a user
+     * Route: /api/admin/users/unban
      */
     const unbanUserMutation = useMutation({
         mutationFn: async (userId: string) => {
-            const payload: UnbanUserRequest = { user_id: userId };
             const response = await adminService.unbanUser(userId);
             return response.data;
         },

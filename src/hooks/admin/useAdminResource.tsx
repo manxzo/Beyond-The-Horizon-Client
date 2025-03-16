@@ -10,6 +10,7 @@ export function useAdminResource() {
 
     /**
      * Get all pending resources
+     * Route: /api/admin/resources/pending
      */
     const getPendingResources = () => ({
         queryKey: QUERY_KEYS.pendingResources,
@@ -30,6 +31,7 @@ export function useAdminResource() {
 
     /**
      * Review a resource
+     * Route: /api/admin/resources/review
      */
     const reviewResourceMutation = useMutation({
         mutationFn: async ({
@@ -41,11 +43,6 @@ export function useAdminResource() {
             approved: boolean;
             adminComments?: string;
         }) => {
-            const payload: ReviewResourceRequest = {
-                resource_id: resourceId,
-                approved,
-                admin_comments: adminComments
-            };
             const response = await adminService.reviewResource(
                 resourceId,
                 approved,

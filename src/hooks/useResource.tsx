@@ -11,6 +11,7 @@ export function useResource() {
 
     /**
      * Get all resources
+     * Route: /api/protected/resources/list
      */
     const getResources = () => ({
         queryKey: QUERY_KEYS.resources,
@@ -24,6 +25,7 @@ export function useResource() {
 
     /**
      * Get a specific resource by ID
+     * Route: /api/protected/resources/{id}
      */
     const getResource = (resourceId: string) => ({
         queryKey: QUERY_KEYS.resource(resourceId),
@@ -32,7 +34,7 @@ export function useResource() {
             return response;
         },
         select: (response: ApiResponse<any>) => response.data,
-        enabled: !!resourceId,
+        staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
     // Define interfaces to match server types
@@ -50,6 +52,7 @@ export function useResource() {
 
     /**
      * Create a new resource
+     * Route: /api/protected/resources/create
      */
     const createResourceMutation = useMutation({
         mutationFn: async (resourceData: CreateResourceRequest) => {
@@ -63,18 +66,15 @@ export function useResource() {
 
     /**
      * Update an existing resource
+     * Route: /api/protected/resources/{id}
      */
     const updateResourceMutation = useMutation({
         mutationFn: async ({
             resourceId,
-            resourceData
+            resourceData,
         }: {
             resourceId: string;
-            resourceData: {
-                title?: string;
-                content?: string;
-                support_group_id?: string;
-            }
+            resourceData: UpdateResourceRequest;
         }) => {
             const response = await resourceService.updateResource(resourceId, resourceData);
             return response.data;
@@ -87,13 +87,15 @@ export function useResource() {
 
     /**
      * Delete a resource
+     * Route: /api/protected/resources/{id}
      */
     const deleteResourceMutation = useMutation({
         mutationFn: async (resourceId: string) => {
             const response = await resourceService.deleteResource(resourceId);
             return response.data;
         },
-        onSuccess: () => {
+        onSuccess: (_, resourceId) => {
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.resource(resourceId) });
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.resources });
         },
     });

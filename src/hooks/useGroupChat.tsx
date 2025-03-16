@@ -1,25 +1,19 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { groupChatService, ApiResponse } from '../services/services';
 
-// Define interfaces to match server types
-interface SendGroupChatMessageRequest {
-    content: string;
-}
-
-interface AddGroupChatMemberRequest {
-    member_id: string;
-}
-
 export function useGroupChat() {
     const queryClient = useQueryClient();
 
     const QUERY_KEYS = {
         groupChats: ['groupChats'],
-        groupChat: (id: string) => ['groupChat', id],
+        groupChat: (chatId: string) => ['groupChat', chatId],
+        groupChatMessages: (chatId: string) => ['groupChat', chatId, 'messages'],
+        groupChatMembers: (chatId: string) => ['groupChat', chatId, 'members'],
     };
 
     /**
      * Get all group chats for the current user
+     * Route: /api/protected/group-chats/list
      */
     const getGroupChats = () => ({
         queryKey: QUERY_KEYS.groupChats,
@@ -32,7 +26,8 @@ export function useGroupChat() {
     });
 
     /**
-     * Get details for a specific group chat
+     * Get details of a specific group chat
+     * Route: /api/protected/group-chats/{group_chat_id}
      */
     const getGroupChatDetails = (chatId: string) => ({
         queryKey: QUERY_KEYS.groupChat(chatId),
@@ -41,11 +36,12 @@ export function useGroupChat() {
             return response;
         },
         select: (response: ApiResponse<any>) => response.data,
-        enabled: !!chatId,
+        staleTime: 1 * 60 * 1000, // 1 minute
     });
 
     /**
      * Create a new group chat
+     * Route: /api/protected/group-chats/create
      */
     const createGroupChatMutation = useMutation({
         mutationFn: async () => {
@@ -58,109 +54,109 @@ export function useGroupChat() {
     });
 
     /**
-     * Send a message in a group chat
+     * Send a message to a group chat
+     * Route: /api/protected/group-chats/{group_chat_id}/messages
      */
     const sendGroupChatMessageMutation = useMutation({
         mutationFn: async ({
             chatId,
-            content
+            content,
         }: {
             chatId: string;
-            content: string
+            content: string;
         }) => {
             const response = await groupChatService.sendGroupChatMessage(chatId, content);
             return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: QUERY_KEYS.groupChat(variables.chatId)
-            });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChatMessages(variables.chatId) });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChat(variables.chatId) });
         },
     });
 
     /**
      * Edit a message in a group chat
+     * Route: /api/protected/group-chats/{group_chat_id}/messages/{message_id}
      */
     const editGroupChatMessageMutation = useMutation({
         mutationFn: async ({
             chatId,
             messageId,
-            content
+            content,
         }: {
             chatId: string;
             messageId: string;
-            content: string
+            content: string;
         }) => {
             const response = await groupChatService.editGroupChatMessage(chatId, messageId, content);
             return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: QUERY_KEYS.groupChat(variables.chatId)
-            });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChatMessages(variables.chatId) });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChat(variables.chatId) });
         },
     });
 
     /**
      * Delete a message from a group chat
+     * Route: /api/protected/group-chats/{group_chat_id}/messages/{message_id}
      */
     const deleteGroupChatMessageMutation = useMutation({
         mutationFn: async ({
             chatId,
-            messageId
+            messageId,
         }: {
             chatId: string;
-            messageId: string
+            messageId: string;
         }) => {
             const response = await groupChatService.deleteGroupChatMessage(chatId, messageId);
             return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: QUERY_KEYS.groupChat(variables.chatId)
-            });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChatMessages(variables.chatId) });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChat(variables.chatId) });
         },
     });
 
     /**
      * Add a member to a group chat
+     * Route: /api/protected/group-chats/{group_chat_id}/members
      */
     const addGroupChatMemberMutation = useMutation({
         mutationFn: async ({
             chatId,
-            memberId
+            memberId,
         }: {
             chatId: string;
-            memberId: string
+            memberId: string;
         }) => {
             const response = await groupChatService.addGroupChatMember(chatId, memberId);
             return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: QUERY_KEYS.groupChat(variables.chatId)
-            });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChatMembers(variables.chatId) });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChat(variables.chatId) });
         },
     });
 
     /**
      * Remove a member from a group chat
+     * Route: /api/protected/group-chats/{group_chat_id}/members/{member_id}
      */
     const removeGroupChatMemberMutation = useMutation({
         mutationFn: async ({
             chatId,
-            memberId
+            memberId,
         }: {
             chatId: string;
-            memberId: string
+            memberId: string;
         }) => {
             const response = await groupChatService.removeGroupChatMember(chatId, memberId);
             return response.data;
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: QUERY_KEYS.groupChat(variables.chatId)
-            });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChatMembers(variables.chatId) });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.groupChat(variables.chatId) });
         },
     });
 

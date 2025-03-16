@@ -49,54 +49,40 @@ export function useSupportGroup() {
 
     const QUERY_KEYS = {
         supportGroups: ['supportGroups'],
-        supportGroup: (id: string) => ['supportGroup', id],
         myGroups: ['myGroups'],
     };
 
     /**
      * Get all support groups
+     * Route: /api/protected/support-groups/list
      */
     const getSupportGroups = () => ({
         queryKey: QUERY_KEYS.supportGroups,
         queryFn: async () => {
-            // Get the full response
             const response = await supportGroupService.getSupportGroups();
             return response;
         },
-        select: (response: ApiResponse<SupportGroupSummary[]>) => response.data,
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
     /**
-     * Get details for a specific support group
-     */
-    const getSupportGroupDetails = (groupId: string) => ({
-        queryKey: QUERY_KEYS.supportGroup(groupId),
-        queryFn: async () => {
-            // Get the full response
-            const response = await supportGroupService.getSupportGroupDetails(groupId);
-            return response;
-        },
-        select: (response: ApiResponse<SupportGroupDetails>) => response.data,
-        enabled: !!groupId,
-    });
-
-    /**
      * Get support groups the current user is a member of
+     * Route: /api/protected/support-groups/my
      */
     const getMyGroups = () => ({
         queryKey: QUERY_KEYS.myGroups,
         queryFn: async () => {
-            // Get the full response
             const response = await supportGroupService.getMyGroups();
             return response;
         },
-        select: (response: ApiResponse<UserSupportGroup[]>) => response.data,
+        select: (response: ApiResponse<any>) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
     /**
      * Suggest a new support group
+     * Route: /api/protected/support-groups/suggest
      */
     const suggestSupportGroupMutation = useMutation({
         mutationFn: async (groupData: SuggestSupportGroupRequest) => {
@@ -110,32 +96,15 @@ export function useSupportGroup() {
 
     /**
      * Join a support group
+     * Route: /api/protected/support-groups/join
      */
     const joinSupportGroupMutation = useMutation({
         mutationFn: async (supportGroupId: string) => {
             const response = await supportGroupService.joinSupportGroup(supportGroupId);
             return response.data;
         },
-        onSuccess: (_, supportGroupId) => {
-            queryClient.invalidateQueries({
-                queryKey: QUERY_KEYS.supportGroup(supportGroupId)
-            });
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.myGroups });
-        },
-    });
-
-    /**
-     * Leave a support group
-     */
-    const leaveSupportGroupMutation = useMutation({
-        mutationFn: async (groupId: string) => {
-            const response = await supportGroupService.leaveSupportGroup(groupId);
-            return response.data;
-        },
-        onSuccess: (_, groupId) => {
-            queryClient.invalidateQueries({
-                queryKey: QUERY_KEYS.supportGroup(groupId)
-            });
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.supportGroups });
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.myGroups });
         },
     });
@@ -143,7 +112,6 @@ export function useSupportGroup() {
     return {
         // Queries
         getSupportGroups,
-        getSupportGroupDetails,
         getMyGroups,
 
         // Mutations
@@ -154,9 +122,5 @@ export function useSupportGroup() {
         joinSupportGroup: joinSupportGroupMutation.mutate,
         isJoiningSupportGroup: joinSupportGroupMutation.isPending,
         joinSupportGroupError: joinSupportGroupMutation.error,
-
-        leaveSupportGroup: leaveSupportGroupMutation.mutate,
-        isLeavingSupportGroup: leaveSupportGroupMutation.isPending,
-        leaveSupportGroupError: leaveSupportGroupMutation.error,
     };
 } 

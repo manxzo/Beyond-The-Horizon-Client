@@ -11,6 +11,7 @@ export function useMatching() {
 
     /**
      * Get recommended sponsors for the current user
+     * Route: /api/protected/matching/recommend-sponsors
      */
     const getRecommendedSponsors = () => ({
         queryKey: QUERY_KEYS.recommendedSponsors,
@@ -24,6 +25,7 @@ export function useMatching() {
 
     /**
      * Get the current user's matching status
+     * Route: /api/protected/matching/status
      */
     const getMatchingStatus = () => ({
         queryKey: QUERY_KEYS.matchingStatus,
@@ -37,6 +39,7 @@ export function useMatching() {
 
     /**
      * Request a specific sponsor
+     * Route: /api/protected/matching/request-sponsor
      */
     const requestSponsorMutation = useMutation({
         mutationFn: async (sponsorId: string) => {
@@ -51,6 +54,7 @@ export function useMatching() {
 
     /**
      * Respond to a matching request (accept or decline)
+     * Route: /api/protected/matching/respond
      */
     const respondToMatchingRequestMutation = useMutation({
         mutationFn: async ({

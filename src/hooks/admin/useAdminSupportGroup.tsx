@@ -10,6 +10,7 @@ export function useAdminSupportGroup() {
 
     /**
      * Get all pending support groups
+     * Route: /api/admin/support-groups/pending
      */
     const getPendingSupportGroups = () => ({
         queryKey: QUERY_KEYS.pendingSupportGroups,
@@ -30,6 +31,7 @@ export function useAdminSupportGroup() {
 
     /**
      * Review a support group
+     * Route: /api/admin/support-groups/review
      */
     const reviewSupportGroupMutation = useMutation({
         mutationFn: async ({
@@ -41,11 +43,6 @@ export function useAdminSupportGroup() {
             status: string;
             adminComments?: string;
         }) => {
-            const payload: ReviewSupportGroupRequest = {
-                support_group_id: supportGroupId,
-                status,
-                admin_comments: adminComments
-            };
             const response = await adminService.reviewSupportGroup(
                 supportGroupId,
                 status,

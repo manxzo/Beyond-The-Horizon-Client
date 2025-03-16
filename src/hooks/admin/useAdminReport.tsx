@@ -10,6 +10,7 @@ export function useAdminReport() {
 
     /**
      * Get all unresolved reports
+     * Route: /api/admin/reports/unresolved
      */
     const getUnresolvedReports = () => ({
         queryKey: QUERY_KEYS.unresolvedReports,
@@ -30,6 +31,7 @@ export function useAdminReport() {
 
     /**
      * Handle a report
+     * Route: /api/admin/reports/handle
      */
     const handleReportMutation = useMutation({
         mutationFn: async ({
@@ -41,11 +43,6 @@ export function useAdminReport() {
             actionTaken: string;
             resolved: boolean;
         }) => {
-            const payload: HandleReportRequest = {
-                report_id: reportId,
-                action_taken: actionTaken,
-                resolved
-            };
             const response = await adminService.handleReport(
                 reportId,
                 actionTaken,

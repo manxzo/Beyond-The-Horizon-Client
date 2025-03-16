@@ -42,9 +42,14 @@ export const siteConfig: SiteConfig = {
         description: "Learn about our mission and values",
       },
       {
-        label: "Resources",
-        href: "/public-resources",
-        description: "Access publicly available resources",
+        label: "Login",
+        href: "/login",
+        description: "Sign in to your account",
+      },
+      {
+        label: "Register",
+        href: "/register",
+        description: "Create a new account",
       },
     ],
     // Member-specific navigation items (only for logged-in users)
@@ -74,34 +79,44 @@ export const siteConfig: SiteConfig = {
         href: "/resources",
         description: "Access member-only resources and materials",
       },
+      {
+        label: "Profile",
+        href: "/profile",
+        description: "View and edit your profile",
+      },
+      {
+        label: "Meetings",
+        href: "/meetings",
+        description: "Schedule and join meetings",
+      },
     ],
     // Sponsor-specific navigation items (only for sponsors)
     sponsor: [
+      {
+        label: "Dashboard",
+        href: "/sponsor-dashboard",
+        description: "View your sponsor dashboard and analytics",
+      },
       {
         label: "My Mentees",
         href: "/mentees",
         description: "Manage your mentee relationships",
       },
       {
-        label: "Sponsor Resources",
-        href: "/sponsor-resources",
-        description: "Access sponsor-specific resources",
-      },
-      {
-        label: "Sponsor Dashboard",
-        href: "/sponsor-dashboard",
-        description: "View your sponsor dashboard and analytics",
-      },
-      {
         label: "Mentoring Sessions",
         href: "/mentoring-sessions",
         description: "Schedule and manage mentoring sessions",
+      },
+      {
+        label: "Matching",
+        href: "/matching",
+        description: "Find and match with potential mentees",
       },
     ],
     // Admin-specific navigation items
     admin: [
       {
-        label: "Admin Dashboard",
+        label: "Dashboard",
         href: "/admin",
         description: "Access the main admin dashboard",
       },
@@ -117,7 +132,7 @@ export const siteConfig: SiteConfig = {
       },
       {
         label: "Sponsor Applications",
-        href: "/admin/sponsor-applications",
+        href: "/admin/sponsors",
         description: "Review and process sponsor applications",
       },
       {
@@ -131,7 +146,7 @@ export const siteConfig: SiteConfig = {
         description: "Manage platform resources and content",
       },
       {
-        label: "System Stats",
+        label: "Statistics",
         href: "/admin/stats",
         description: "View platform statistics and analytics",
       },

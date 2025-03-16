@@ -12,6 +12,7 @@ interface CreateReportRequest {
 export function useReport() {
     /**
      * Create a new report
+     * Route: /api/protected/reports/new
      */
     const createReportMutation = useMutation({
         mutationFn: async (reportData: CreateReportRequest) => {

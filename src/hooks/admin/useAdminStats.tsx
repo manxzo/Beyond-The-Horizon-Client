@@ -7,6 +7,7 @@ export function useAdminStats() {
 
     /**
      * Get admin dashboard statistics
+     * Route: /api/admin/stats
      */
     const getAdminStats = () => ({
         queryKey: QUERY_KEYS.adminStats,

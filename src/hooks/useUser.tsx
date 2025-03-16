@@ -39,6 +39,7 @@ export function useUser() {
 
     /**
      * Fetch the current logged-in user's data, but only if authenticated
+     * Route: /api/protected/users/info
      */
     const {
         data: currentUser,
@@ -116,8 +117,7 @@ export function useUser() {
 
     /**
      * Login mutation - handles user login and updates the current user data.
-     * 
-     * This version has been adjusted to always fetch and save the full user data.
+     * Route: /api/public/auth/login
      */
     const loginMutation = useMutation({
         mutationFn: async ({ username, password }: { username: string; password: string }) => {
@@ -177,6 +177,7 @@ export function useUser() {
 
     /**
      * Register mutation - handles user registration
+     * Route: /api/public/auth/register
      */
     const registerMutation = useMutation({
         mutationFn: async (userData: userSignupData) => {
@@ -191,6 +192,7 @@ export function useUser() {
 
     /**
      * Logout mutation - handles user logout
+     * Route: /api/protected/auth/logout
      */
     const logoutMutation = useMutation({
         mutationFn: async () => {
@@ -211,6 +213,7 @@ export function useUser() {
 
     /**
      * Update profile mutation - handles updating user profile information
+     * Route: /api/protected/users/update-info
      */
     const updateProfileMutation = useMutation({
         mutationFn: async (profileData: {
@@ -233,6 +236,7 @@ export function useUser() {
 
     /**
      * Update avatar mutation - handles uploading a new user avatar
+     * Route: /api/protected/users/avatar/upload
      */
     const updateAvatarMutation = useMutation({
         mutationFn: async (file: File) => {
@@ -246,6 +250,7 @@ export function useUser() {
 
     /**
      * Reset avatar mutation - handles resetting user avatar to default
+     * Route: /api/protected/users/avatar/reset
      */
     const resetAvatarMutation = useMutation({
         mutationFn: async () => {
@@ -259,6 +264,7 @@ export function useUser() {
 
     /**
      * Delete account mutation - handles user account deletion
+     * Route: /api/protected/users/delete-user
      */
     const deleteAccountMutation = useMutation({
         mutationFn: async () => {
@@ -272,24 +278,8 @@ export function useUser() {
     });
 
     /**
-     * Fetch a user profile by username - returns a query configuration
-     */
-    const getUserProfile = (username: string) => {
-        const queryConfig = {
-            queryKey: QUERY_KEYS.userProfile(username),
-            queryFn: async () => {
-                // Get the full response and return its data property
-                const response = await userService.getUserByName(username);
-                return response.data;
-            },
-            enabled: !!username,
-        };
-
-        return queryConfig;
-    };
-
-    /**
      * Refresh the user's authentication session
+     * Route: /api/public/auth/refresh
      */
     const refreshSession = async () => {
         try {
@@ -374,9 +364,6 @@ export function useUser() {
 
         deleteAccount: deleteAccountMutation.mutate,
         isDeletingAccount: deleteAccountMutation.isPending,
-
-        // User profile fetching (query config)
-        getUserProfile,
     };
 }
 

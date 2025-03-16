@@ -10,6 +10,7 @@ export function useSponsor() {
 
     /**
      * Check the current user's sponsor application status
+     * Route: /api/protected/sponsor/check
      */
     const getSponsorApplicationStatus = () => ({
         queryKey: QUERY_KEYS.sponsorApplicationStatus,
@@ -21,10 +22,9 @@ export function useSponsor() {
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
-
-
     /**
      * Apply to become a sponsor
+     * Route: /api/protected/sponsor/apply
      */
     const applyForSponsorMutation = useMutation({
         mutationFn: async (applicationInfo: string) => {
@@ -40,6 +40,7 @@ export function useSponsor() {
 
     /**
      * Update an existing sponsor application
+     * Route: /api/protected/sponsor/update
      */
     const updateSponsorApplicationMutation = useMutation({
         mutationFn: async (applicationInfo: string) => {
@@ -55,6 +56,7 @@ export function useSponsor() {
 
     /**
      * Delete a sponsor application
+     * Route: /api/protected/sponsor/delete
      */
     const deleteSponsorApplicationMutation = useMutation({
         mutationFn: async () => {

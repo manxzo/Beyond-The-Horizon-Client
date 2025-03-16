@@ -10,6 +10,7 @@ export function useAdminSponsor() {
 
     /**
      * Get all pending sponsor applications
+     * Route: /api/admin/sponsor-applications/pending
      */
     const getPendingSponsorApplications = () => ({
         queryKey: QUERY_KEYS.pendingSponsorApplications,
@@ -30,6 +31,7 @@ export function useAdminSponsor() {
 
     /**
      * Review a sponsor application
+     * Route: /api/admin/sponsor-applications/review
      */
     const reviewSponsorApplicationMutation = useMutation({
         mutationFn: async ({
@@ -41,11 +43,6 @@ export function useAdminSponsor() {
             status: string;
             adminComments?: string;
         }) => {
-            const payload: ReviewSponsorApplicationRequest = {
-                application_id: applicationId,
-                status,
-                admin_comments: adminComments
-            };
             const response = await adminService.reviewSponsorApplication(
                 applicationId,
                 status,
