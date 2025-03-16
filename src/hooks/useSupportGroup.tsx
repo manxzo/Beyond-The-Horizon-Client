@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supportGroupService, ApiResponse } from '../services/services';
+import { supportGroupService} from '../services/services';
 
 // Define interfaces to match server types
 export interface SupportGroupSummary {
@@ -29,9 +29,22 @@ export interface SupportGroupDetails {
         status: string;
         created_at: string;
     };
-    members: any[];
-    sponsors: any[];
-    main_group_chat: any | null;
+    members: {
+        support_group_id: string;
+        user_id: string;
+        joined_at: string;
+    }[];
+    sponsors: {
+        user_id: string;
+        username: string;
+        avatar_url: string;
+        role: string;
+    }[];
+    main_group_chat: {
+        group_chat_id: string;
+        created_at: string;
+        creator_id: string;
+    } | null;
     meetings: any[];
     meeting_group_chats: any[];
     is_member?: boolean;
@@ -50,6 +63,7 @@ export function useSupportGroup() {
     const QUERY_KEYS = {
         supportGroups: ['supportGroups'],
         myGroups: ['myGroups'],
+        supportGroup: (groupId: string) => ['supportGroup', groupId],
     };
 
     /**
@@ -62,7 +76,7 @@ export function useSupportGroup() {
             const response = await supportGroupService.getSupportGroups();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response:any) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
@@ -76,8 +90,23 @@ export function useSupportGroup() {
             const response = await supportGroupService.getMyGroups();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response:any) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+
+    /**
+     * Get details of a specific support group
+     * Route: /api/protected/support-groups/{group_id}
+     */
+    const getSupportGroupDetails = (groupId: string) => ({
+        queryKey: QUERY_KEYS.supportGroup(groupId),
+        queryFn: async () => {
+            const response = await supportGroupService.getSupportGroupDetails(groupId);
+            return response;
+        },
+        select: (response:any) => response.data,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        enabled: !!groupId,
     });
 
     /**
@@ -103,9 +132,26 @@ export function useSupportGroup() {
             const response = await supportGroupService.joinSupportGroup(supportGroupId);
             return response.data;
         },
-        onSuccess: () => {
+        onSuccess: (_, supportGroupId) => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.supportGroups });
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.myGroups });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.supportGroup(supportGroupId) });
+        },
+    });
+
+    /**
+     * Leave a support group
+     * Route: /api/protected/support-groups/{group_id}/leave
+     */
+    const leaveSupportGroupMutation = useMutation({
+        mutationFn: async (groupId: string) => {
+            const response = await supportGroupService.leaveSupportGroup(groupId);
+            return response.data;
+        },
+        onSuccess: (_, groupId) => {
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.supportGroups });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.myGroups });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.supportGroup(groupId) });
         },
     });
 
@@ -113,6 +159,7 @@ export function useSupportGroup() {
         // Queries
         getSupportGroups,
         getMyGroups,
+        getSupportGroupDetails,
 
         // Mutations
         suggestSupportGroup: suggestSupportGroupMutation.mutate,
@@ -122,5 +169,9 @@ export function useSupportGroup() {
         joinSupportGroup: joinSupportGroupMutation.mutate,
         isJoiningSupportGroup: joinSupportGroupMutation.isPending,
         joinSupportGroupError: joinSupportGroupMutation.error,
+
+        leaveSupportGroup: leaveSupportGroupMutation.mutate,
+        isLeavingSupportGroup: leaveSupportGroupMutation.isPending,
+        leaveSupportGroupError: leaveSupportGroupMutation.error,
     };
 } 

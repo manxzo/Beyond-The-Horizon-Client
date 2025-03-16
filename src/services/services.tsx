@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosResponse } from "axios";
 import { addToast } from "@heroui/react";
 import { jwtDecode } from "jwt-decode";
-import CryptoJS from 'crypto-js';
+
 
 // Get the API URL from environment variables or use a default
 const API_URL = import.meta.env.VITE_SERVER_URL || 'https://bth-server-ywjx.shuttle.app';
@@ -17,55 +17,24 @@ interface JwtPayload {
 
 // Create a secure token management utility
 const tokenManager = {
-    // Encryption key derived from a combination of browser fingerprint and constant
-    // This is not perfect security but better than plaintext
-    getEncryptionKey: (): string => {
-        const browserInfo = [
-            navigator.userAgent,
-            navigator.language,
-            screen.colorDepth,
-            screen.width,
-            screen.height
-        ].join('|');
-
-        // Create a hash of the browser info to use as encryption key
-        return CryptoJS.SHA256('BTH_SECURE_' + browserInfo).toString();
-    },
-
-    // Encrypt the token before storing
-    encryptToken: (token: string): string => {
-        return CryptoJS.AES.encrypt(token, tokenManager.getEncryptionKey()).toString();
-    },
-
-    // Decrypt the token after retrieving
-    decryptToken: (encryptedToken: string): string => {
-        try {
-            const bytes = CryptoJS.AES.decrypt(encryptedToken, tokenManager.getEncryptionKey());
-            return bytes.toString(CryptoJS.enc.Utf8);
-        } catch (e) {
-            console.error('Failed to decrypt token:', e);
-            return '';
-        }
-    },
-
+    
     // Get token from storage and decrypt it
     getToken: (): string | null => {
-        const encryptedToken = localStorage.getItem('auth_token');
-        if (!encryptedToken) return null;
+        const token = localStorage.getItem('auth_token');
+        
 
         try {
-            return tokenManager.decryptToken(encryptedToken);
+            return token;
         } catch (e) {
-            console.error('Error decrypting token:', e);
+            console.error('Error retrieving token:', e);
             localStorage.removeItem('auth_token');
             return null;
         }
     },
 
-    // Encrypt token and store it
+    // Store token
     setToken: (token: string): void => {
-        const encryptedToken = tokenManager.encryptToken(token);
-        localStorage.setItem('auth_token', encryptedToken);
+        localStorage.setItem('auth_token', token);
     },
 
     removeToken: (): void => {
@@ -282,7 +251,7 @@ export interface userSignupData {
 }
 export const authService = {
     // POST /api/public/auth/register
-    register: async (userData: userSignupData): Promise<ApiResponse<any>> => {
+    register: async (userData: userSignupData): Promise<any> => {
         try {
             const response = await publicApi.post("/api/public/auth/register", userData);
             return response;
@@ -295,7 +264,7 @@ export const authService = {
     login: async (
         username: string,
         password: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         try {
             const response = await publicApi.post("/api/public/auth/login", {
                 username,
@@ -314,7 +283,7 @@ export const authService = {
     },
 
     // POST /api/protected/auth/logout
-    logout: async (): Promise<ApiResponse<any>> => {
+    logout: async (): Promise<any> => {
         try {
             // Make sure we have the latest token
             const token = tokenManager.getToken();
@@ -349,7 +318,7 @@ export const authService = {
     },
 
     // POST /api/public/auth/refresh
-    refreshSession: async (): Promise<ApiResponse<any>> => {
+    refreshSession: async (): Promise<any> => {
         // Only attempt to refresh if we have a token
         if (!tokenManager.getToken()) {
             return Promise.reject(new Error("No token to refresh"));
@@ -384,19 +353,25 @@ export const authService = {
 // ==================== USER DATA SERVICES ====================
 export const userService = {
     // GET /api/protected/users/info
-    getCurrentUser: async (): Promise<ApiResponse<any>> => {
+    getCurrentUser: async (): Promise<any> => {
         const response = await api.get("/api/protected/users/info");
         return response;
     },
 
     // GET /api/protected/users/{username}
-    getUserByName: async (username: string): Promise<ApiResponse<any>> => {
+    getUserByName: async (username: string): Promise<any> => {
         const response = await api.get(`/api/protected/users/${username}`);
         return response;
     },
 
+    // GET /api/protected/users/id/{user_id}
+    getUserById: async (userId: string): Promise<any> => {
+        const response = await api.get(`/api/protected/users/id/${userId}`);
+        return response;
+    },
+
     // PATCH /api/protected/users/update-info
-    updateProfile: async (userData: any): Promise<ApiResponse<any>> => {
+    updateProfile: async (userData: any): Promise<any> => {
         const response = await api.patch(
             "/api/protected/users/update-info",
             userData
@@ -405,7 +380,7 @@ export const userService = {
     },
 
     // POST /api/protected/users/avatar/upload
-    updateAvatar: async (file: File): Promise<ApiResponse<any>> => {
+    updateAvatar: async (file: File): Promise<any> => {
         const formData = new FormData();
         formData.append("avatar", file);
 
@@ -430,13 +405,13 @@ export const userService = {
     },
 
     // POST /api/protected/users/avatar/reset
-    resetAvatar: async (): Promise<ApiResponse<any>> => {
+    resetAvatar: async (): Promise<any> => {
         const response = await api.post("/api/protected/users/avatar/reset");
         return response;
     },
 
     // DELETE /api/protected/users/delete-user
-    deleteAccount: async (): Promise<ApiResponse<any>> => {
+    deleteAccount: async (): Promise<any> => {
         const response = await api.delete("/api/protected/users/delete-user");
         return response;
     },
@@ -449,7 +424,7 @@ export const postService = {
         page: number = 1,
         searchTags?: string,
         sortBy?: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         let url = `/api/protected/feed/posts?page=${page}`;
         if (searchTags) {
             url += `&search-tags=${searchTags}`;
@@ -462,7 +437,7 @@ export const postService = {
     },
 
     // GET /api/protected/feed/posts/{id}
-    getPost: async (postId: string): Promise<ApiResponse<any>> => {
+    getPost: async (postId: string): Promise<any> => {
         const response = await api.get(`/api/protected/feed/posts/${postId}`);
         return response;
     },
@@ -471,7 +446,7 @@ export const postService = {
     createPost: async (postData: {
         content: string;
         tags?: string[];
-    }): Promise<ApiResponse<any>> => {
+    }): Promise<any> => {
         const response = await api.post("/api/protected/feed/posts/new", postData);
         return response;
     },
@@ -480,7 +455,7 @@ export const postService = {
     updatePost: async (
         postId: string,
         postData: { content?: string; tags?: string[] }
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.patch(
             `/api/protected/feed/posts/${postId}`,
             postData
@@ -489,13 +464,13 @@ export const postService = {
     },
 
     // DELETE /api/protected/feed/posts/{id}
-    deletePost: async (postId: string): Promise<ApiResponse<any>> => {
+    deletePost: async (postId: string): Promise<any> => {
         const response = await api.delete(`/api/protected/feed/posts/${postId}`);
         return response;
     },
 
     // POST /api/protected/feed/posts/like
-    likePost: async (postId: string): Promise<ApiResponse<any>> => {
+    likePost: async (postId: string): Promise<any> => {
         const response = await api.post(`/api/protected/feed/posts/like`, {
             post_id: postId,
         });
@@ -507,7 +482,7 @@ export const postService = {
         postId: string,
         content: string,
         parentCommentId?: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post(`/api/protected/feed/comments`, {
             post_id: postId,
             content,
@@ -520,7 +495,7 @@ export const postService = {
     updateComment: async (
         commentId: string,
         content: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.patch(
             `/api/protected/feed/comments/${commentId}`,
             {
@@ -531,7 +506,7 @@ export const postService = {
     },
 
     // DELETE /api/protected/feed/comments/{id}
-    deleteComment: async (commentId: string): Promise<ApiResponse<any>> => {
+    deleteComment: async (commentId: string): Promise<any> => {
         const response = await api.delete(
             `/api/protected/feed/comments/${commentId}`
         );
@@ -542,13 +517,13 @@ export const postService = {
 // ==================== PRIVATE MESSAGING SERVICES ====================
 export const messageService = {
     // GET /api/protected/messages/conversations
-    getConversations: async (): Promise<ApiResponse<any>> => {
+    getConversations: async (): Promise<any> => {
         const response = await api.get("/api/protected/messages/conversations");
         return response;
     },
 
     // GET /api/protected/messages/conversation/{username}
-    getMessages: async (username: string): Promise<ApiResponse<any>> => {
+    getMessages: async (username: string): Promise<any> => {
         const response = await api.get(
             `/api/protected/messages/conversation/${username}`
         );
@@ -559,7 +534,7 @@ export const messageService = {
     sendMessage: async (
         receiverUsername: string,
         content: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post(`/api/protected/messages/send`, {
             receiver_username: receiverUsername,
             content,
@@ -568,7 +543,7 @@ export const messageService = {
     },
 
     // PUT /api/protected/messages/{message_id}/seen
-    markMessageSeen: async (messageId: string): Promise<ApiResponse<any>> => {
+    markMessageSeen: async (messageId: string): Promise<any> => {
         const response = await api.put(`/api/protected/messages/${messageId}/seen`);
         return response;
     },
@@ -577,7 +552,7 @@ export const messageService = {
     editMessage: async (
         messageId: string,
         content: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.put(
             `/api/protected/messages/${messageId}/edit`,
             {
@@ -588,7 +563,7 @@ export const messageService = {
     },
 
     // DELETE /api/protected/messages/{message_id}
-    deleteMessage: async (messageId: string): Promise<ApiResponse<any>> => {
+    deleteMessage: async (messageId: string): Promise<any> => {
         const response = await api.delete(`/api/protected/messages/${messageId}`);
         return response;
     },
@@ -597,7 +572,7 @@ export const messageService = {
     reportMessage: async (
         messageId: string,
         reason: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post(
             `/api/protected/messages/${messageId}/report`,
             {
@@ -611,7 +586,7 @@ export const messageService = {
 // ==================== SPONSOR MATCHING SERVICES ====================
 export const matchingService = {
     // GET /api/protected/matching/recommend-sponsors
-    getRecommendedSponsors: async (): Promise<ApiResponse<any>> => {
+    getRecommendedSponsors: async (): Promise<any> => {
         const response = await api.get(
             "/api/protected/matching/recommend-sponsors"
         );
@@ -619,7 +594,7 @@ export const matchingService = {
     },
 
     // POST /api/protected/matching/request-sponsor
-    requestSponsor: async (sponsorId: string): Promise<ApiResponse<any>> => {
+    requestSponsor: async (sponsorId: string): Promise<any> => {
         const response = await api.post("/api/protected/matching/request-sponsor", {
             sponsor_id: sponsorId,
         });
@@ -627,7 +602,7 @@ export const matchingService = {
     },
 
     // GET /api/protected/matching/status
-    getMatchingStatus: async (): Promise<ApiResponse<any>> => {
+    getMatchingStatus: async (): Promise<any> => {
         const response = await api.get("/api/protected/matching/status");
         return response;
     },
@@ -636,7 +611,7 @@ export const matchingService = {
     respondToMatchingRequest: async (
         matchingRequestId: string,
         accept: boolean
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.patch("/api/protected/matching/respond", {
             matching_request_id: matchingRequestId,
             accept,
@@ -650,7 +625,7 @@ export const sponsorService = {
     // POST /api/protected/sponsor/apply
     applyForSponsor: async (
         applicationInfo: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post("/api/protected/sponsor/apply", {
             application_info: applicationInfo,
         });
@@ -658,7 +633,7 @@ export const sponsorService = {
     },
 
     // GET /api/protected/sponsor/check
-    checkSponsorApplicationStatus: async (): Promise<ApiResponse<any>> => {
+    checkSponsorApplicationStatus: async (): Promise<any> => {
         const response = await api.get("/api/protected/sponsor/check");
         return response;
     },
@@ -666,7 +641,7 @@ export const sponsorService = {
     // PATCH /api/protected/sponsor/update
     updateSponsorApplication: async (
         applicationInfo: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.patch("/api/protected/sponsor/update", {
             application_info: applicationInfo,
         });
@@ -674,7 +649,7 @@ export const sponsorService = {
     },
 
     // DELETE /api/protected/sponsor/delete
-    deleteSponsorApplication: async (): Promise<ApiResponse<any>> => {
+    deleteSponsorApplication: async (): Promise<any> => {
         const response = await api.delete("/api/protected/sponsor/delete");
         return response;
     },
@@ -686,24 +661,26 @@ export const supportGroupService = {
     suggestSupportGroup: async (groupData: {
         title: string;
         description: string;
-    }): Promise<ApiResponse<any>> => {
+    }): Promise<any> => {
         const response = await api.post(
             "/api/protected/support-groups/suggest",
             groupData
         );
+        console.log(response);
         return response;
     },
 
     // GET /api/protected/support-groups/list
-    getSupportGroups: async (): Promise<ApiResponse<any>> => {
+    getSupportGroups: async (): Promise<any> => {
         const response = await api.get("/api/protected/support-groups/list");
+        console.log(response);
         return response;
     },
 
     // GET /api/protected/support-groups/{group_id}
     getSupportGroupDetails: async (
         groupId: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.get(`/api/protected/support-groups/${groupId}`);
         return response;
     },
@@ -711,7 +688,7 @@ export const supportGroupService = {
     // POST /api/protected/support-groups/join
     joinSupportGroup: async (
         supportGroupId: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post("/api/protected/support-groups/join", {
             support_group_id: supportGroupId,
         });
@@ -719,7 +696,7 @@ export const supportGroupService = {
     },
 
     // DELETE /api/protected/support-groups/{group_id}/leave
-    leaveSupportGroup: async (groupId: string): Promise<ApiResponse<any>> => {
+    leaveSupportGroup: async (groupId: string): Promise<any> => {
         const response = await api.delete(
             `/api/protected/support-groups/${groupId}/leave`
         );
@@ -727,7 +704,7 @@ export const supportGroupService = {
     },
 
     // GET /api/protected/support-groups/my
-    getMyGroups: async (): Promise<ApiResponse<any>> => {
+    getMyGroups: async (): Promise<any> => {
         const response = await api.get("/api/protected/support-groups/my");
         return response;
     },
@@ -737,31 +714,30 @@ export const supportGroupService = {
 export const meetingService = {
     // POST /api/protected/support-groups/{group_id}/meetings
     createMeeting: async (
-        groupId: string,
         meetingData: {
             title: string;
             description?: string;
             scheduled_time: string;
             support_group_id: string;
         }
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post(
-            `/api/protected/support-groups/${groupId}/meetings`,
+            `/api/protected/meetings/new`,
             meetingData
         );
         return response;
     },
 
-    // GET /api/protected/support-groups/{group_id}/meetings
-    getGroupMeetings: async (groupId: string): Promise<ApiResponse<any>> => {
-        const response = await api.get(
-            `/api/protected/support-groups/${groupId}/meetings`
-        );
+  
+
+    // GET /api/protected/meetings/{meeting_id}
+    getMeeting: async (meetingId: string): Promise<any> => {
+        const response = await api.get(`/api/protected/meetings/${meetingId}`);
         return response;
     },
 
     // POST /api/protected/meetings/{meeting_id}/join
-    joinMeeting: async (meetingId: string): Promise<ApiResponse<any>> => {
+    joinMeeting: async (meetingId: string): Promise<any> => {
         const response = await api.post(
             `/api/protected/meetings/${meetingId}/join`,
             {
@@ -772,7 +748,7 @@ export const meetingService = {
     },
 
     // DELETE /api/protected/meetings/{meeting_id}/leave
-    leaveMeeting: async (meetingId: string): Promise<ApiResponse<any>> => {
+    leaveMeeting: async (meetingId: string): Promise<any> => {
         const response = await api.delete(
             `/api/protected/meetings/${meetingId}/leave`
         );
@@ -782,7 +758,7 @@ export const meetingService = {
     // GET /api/protected/meetings/{meeting_id}/participants
     getMeetingParticipants: async (
         meetingId: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.get(
             `/api/protected/meetings/${meetingId}/participants`
         );
@@ -790,7 +766,7 @@ export const meetingService = {
     },
 
     // POST /api/protected/meetings/{meeting_id}/start
-    startMeeting: async (meetingId: string): Promise<ApiResponse<any>> => {
+    startMeeting: async (meetingId: string): Promise<any> => {
         const response = await api.post(
             `/api/protected/meetings/${meetingId}/start`
         );
@@ -798,7 +774,7 @@ export const meetingService = {
     },
 
     // POST /api/protected/meetings/{meeting_id}/end
-    endMeeting: async (meetingId: string): Promise<ApiResponse<any>> => {
+    endMeeting: async (meetingId: string): Promise<any> => {
         const response = await api.post(`/api/protected/meetings/${meetingId}/end`);
         return response;
     },
@@ -807,19 +783,19 @@ export const meetingService = {
 // ==================== GROUP CHAT SERVICES ====================
 export const groupChatService = {
     // POST /api/protected/group-chats/create
-    createGroupChat: async (): Promise<ApiResponse<any>> => {
+    createGroupChat: async (): Promise<any> => {
         const response = await api.post("/api/protected/group-chats/create");
         return response;
     },
 
     // GET /api/protected/group-chats/list
-    getGroupChats: async (): Promise<ApiResponse<any>> => {
+    getGroupChats: async (): Promise<any> => {
         const response = await api.get("/api/protected/group-chats/list");
         return response;
     },
 
     // GET /api/protected/group-chats/{group_chat_id}
-    getGroupChatDetails: async (chatId: string): Promise<ApiResponse<any>> => {
+    getGroupChatDetails: async (chatId: string): Promise<any> => {
         const response = await api.get(`/api/protected/group-chats/${chatId}`);
         return response;
     },
@@ -828,7 +804,7 @@ export const groupChatService = {
     sendGroupChatMessage: async (
         chatId: string,
         content: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post(
             `/api/protected/group-chats/${chatId}/messages`,
             {
@@ -843,7 +819,7 @@ export const groupChatService = {
         chatId: string,
         messageId: string,
         content: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.patch(
             `/api/protected/group-chats/${chatId}/messages/${messageId}`,
             { content }
@@ -855,7 +831,7 @@ export const groupChatService = {
     deleteGroupChatMessage: async (
         chatId: string,
         messageId: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.delete(
             `/api/protected/group-chats/${chatId}/messages/${messageId}`
         );
@@ -866,7 +842,7 @@ export const groupChatService = {
     addGroupChatMember: async (
         chatId: string,
         memberId: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post(
             `/api/protected/group-chats/${chatId}/members`,
             {
@@ -880,7 +856,7 @@ export const groupChatService = {
     removeGroupChatMember: async (
         chatId: string,
         memberId: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.delete(
             `/api/protected/group-chats/${chatId}/members/${memberId}`
         );
@@ -891,13 +867,13 @@ export const groupChatService = {
 // ==================== RESOURCE SERVICES ====================
 export const resourceService = {
     // GET /api/protected/resources/list
-    getResources: async (): Promise<ApiResponse<any>> => {
+    getResources: async (): Promise<any> => {
         const response = await api.get("/api/protected/resources/list");
         return response;
     },
 
     // GET /api/protected/resources/{id}
-    getResource: async (resourceId: string): Promise<ApiResponse<any>> => {
+    getResource: async (resourceId: string): Promise<any> => {
         const response = await api.get(`/api/protected/resources/${resourceId}`);
         return response;
     },
@@ -907,7 +883,7 @@ export const resourceService = {
         title: string;
         content: string;
         support_group_id?: string;
-    }): Promise<ApiResponse<any>> => {
+    }): Promise<any> => {
         const response = await api.post(
             "/api/protected/resources/create",
             resourceData
@@ -923,7 +899,7 @@ export const resourceService = {
             content?: string;
             support_group_id?: string;
         }
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.patch(
             `/api/protected/resources/${resourceId}`,
             resourceData
@@ -932,7 +908,7 @@ export const resourceService = {
     },
 
     // DELETE /api/protected/resources/{id}
-    deleteResource: async (resourceId: string): Promise<ApiResponse<any>> => {
+    deleteResource: async (resourceId: string): Promise<any> => {
         const response = await api.delete(`/api/protected/resources/${resourceId}`);
         return response;
     },
@@ -946,7 +922,7 @@ export const reportService = {
         reason: string;
         reported_type: string;
         reported_item_id: string;
-    }): Promise<ApiResponse<any>> => {
+    }): Promise<any> => {
         const response = await api.post("/api/protected/reports/new", reportData);
         return response;
     },
@@ -955,7 +931,7 @@ export const reportService = {
 // ==================== ADMIN SERVICES ====================
 export const adminService = {
     // GET /api/admin/sponsor-applications/pending
-    getPendingSponsorApplications: async (): Promise<ApiResponse<any>> => {
+    getPendingSponsorApplications: async (): Promise<any> => {
         const response = await api.get("/api/admin/sponsor-applications/pending");
         return response;
     },
@@ -965,7 +941,7 @@ export const adminService = {
         applicationId: string,
         status: string,
         adminComments?: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post("/api/admin/sponsor-applications/review", {
             application_id: applicationId,
             status,
@@ -975,7 +951,7 @@ export const adminService = {
     },
 
     // GET /api/admin/support-groups/pending
-    getPendingSupportGroups: async (): Promise<ApiResponse<any>> => {
+    getPendingSupportGroups: async (): Promise<any> => {
         const response = await api.get("/api/admin/support-groups/pending");
         return response;
     },
@@ -985,7 +961,7 @@ export const adminService = {
         supportGroupId: string,
         status: string,
         adminComments?: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post("/api/admin/support-groups/review", {
             support_group_id: supportGroupId,
             status,
@@ -995,7 +971,7 @@ export const adminService = {
     },
 
     // GET /api/admin/resources/pending
-    getPendingResources: async (): Promise<ApiResponse<any>> => {
+    getPendingResources: async (): Promise<any> => {
         const response = await api.get("/api/admin/resources/pending");
         return response;
     },
@@ -1005,7 +981,7 @@ export const adminService = {
         resourceId: string,
         approved: boolean,
         adminComments?: string
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post("/api/admin/resources/review", {
             resource_id: resourceId,
             approved,
@@ -1015,7 +991,7 @@ export const adminService = {
     },
 
     // GET /api/admin/reports/unresolved
-    getUnresolvedReports: async (): Promise<ApiResponse<any>> => {
+    getUnresolvedReports: async (): Promise<any> => {
         const response = await api.get("/api/admin/reports/unresolved");
         return response;
     },
@@ -1025,7 +1001,7 @@ export const adminService = {
         reportId: string,
         actionTaken: string,
         resolved: boolean
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post("/api/admin/reports/handle", {
             report_id: reportId,
             action_taken: actionTaken,
@@ -1039,7 +1015,7 @@ export const adminService = {
         userId: string,
         reason: string,
         banDurationDays?: number
-    ): Promise<ApiResponse<any>> => {
+    ): Promise<any> => {
         const response = await api.post("/api/admin/users/ban", {
             user_id: userId,
             reason,
@@ -1049,7 +1025,7 @@ export const adminService = {
     },
 
     // POST /api/admin/users/unban
-    unbanUser: async (userId: string): Promise<ApiResponse<any>> => {
+    unbanUser: async (userId: string): Promise<any> => {
         const response = await api.post("/api/admin/users/unban", {
             user_id: userId,
         });
@@ -1057,13 +1033,13 @@ export const adminService = {
     },
 
     // GET /api/admin/users/banned
-    getBannedUsers: async (): Promise<ApiResponse<any>> => {
+    getBannedUsers: async (): Promise<any> => {
         const response = await api.get("/api/admin/users/banned");
         return response;
     },
 
     // GET /api/admin/stats
-    getAdminStats: async (): Promise<ApiResponse<any>> => {
+    getAdminStats: async (): Promise<any> => {
         const response = await api.get("/api/admin/stats");
         return response;
     },
@@ -1084,10 +1060,8 @@ export const wsService = {
         return `${baseUrl}/api/protected/ws/connect?token=${token}`;
     },
 
-  
-
     // POST /api/protected/ws/send-user - Send a message to a specific user
-    sendToUser: async (userId: string, payload: any): Promise<ApiResponse<any>> => {
+    sendToUser: async (userId: string, payload: any): Promise<any> => {
         try {
             const response = await api.post('/api/protected/ws/send-user', {
                 user_id: userId,
@@ -1100,7 +1074,7 @@ export const wsService = {
     },
 
     // POST /api/protected/ws/send-users - Send a message to multiple users
-    sendToUsers: async (userIds: string[], payload: any): Promise<ApiResponse<any>> => {
+    sendToUsers: async (userIds: string[], payload: any): Promise<any> => {
         try {
             const response = await api.post('/api/protected/ws/send-users', {
                 user_ids: userIds,
@@ -1113,7 +1087,7 @@ export const wsService = {
     },
 
     // POST /api/protected/ws/send-role - Send a message to all users with a specific role
-    sendToRole: async (role: string, payload: any): Promise<ApiResponse<any>> => {
+    sendToRole: async (role: string, payload: any): Promise<any> => {
         try {
             const response = await api.post('/api/protected/ws/send-role', {
                 role,
@@ -1126,7 +1100,7 @@ export const wsService = {
     },
 
     // POST /api/protected/ws/send-all - Send a message to all connected users
-    sendToAll: async (payload: any): Promise<ApiResponse<any>> => {
+    sendToAll: async (payload: any): Promise<any> => {
         try {
             const response = await api.post('/api/protected/ws/send-all', {
                 payload

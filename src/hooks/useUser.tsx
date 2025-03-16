@@ -12,6 +12,7 @@ export function useUser() {
     const QUERY_KEYS = {
         currentUser: ['currentUser'],
         userProfile: (username: string) => ['userProfile', username],
+        userById: (userId: string) => ['userById', userId],
         authStatus: ['authStatus'],
     };
 
@@ -99,6 +100,12 @@ export function useUser() {
                 });
         } else {
             setIsInitialized(true);
+        }
+        if(!token && user) {
+            localStorage.removeItem('user');
+            tokenManager.removeToken();
+            setStoredUser(null);
+            queryClient.setQueryData(QUERY_KEYS.currentUser, null);
         }
     }, [queryClient, recheckAuth, refetchUser]);
 
@@ -313,6 +320,40 @@ export function useUser() {
         }
     };
 
+    /**
+     * Get a user profile by username
+     * Route: /api/protected/users/{username}
+     */
+    const useGetUserByName = (username: string) => {
+        return useQuery({
+            queryKey: QUERY_KEYS.userProfile(username),
+            queryFn: async () => {
+                const response = await userService.getUserByName(username);
+                return response.data;
+            },
+            enabled: !!username && isAuthenticated,
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            retry: 1,
+        });
+    };
+
+    /**
+     * Get a user profile by ID
+     * Route: /api/protected/users/id/{user_id}
+     */
+    const useGetUserById = (userId: string) => {
+        return useQuery({
+            queryKey: QUERY_KEYS.userById(userId),
+            queryFn: async () => {
+                const response = await userService.getUserById(userId);
+                return response.data;
+            },
+            enabled: !!userId && isAuthenticated,
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            retry: 1,
+        });
+    };
+
     // Return all functions and data for user management
     return {
         currentUser: userData,
@@ -322,6 +363,10 @@ export function useUser() {
         isAuthenticated,
         isCheckingAuth,
         refetchUser,
+
+        // User profile queries
+        useGetUserByName,
+        useGetUserById,
 
         // Auth functions
         login: loginMutation.mutate,

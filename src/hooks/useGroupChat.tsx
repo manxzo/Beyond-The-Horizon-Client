@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { groupChatService, ApiResponse } from '../services/services';
+import { groupChatService } from '../services/services';
 
 export function useGroupChat() {
     const queryClient = useQueryClient();
@@ -21,7 +21,7 @@ export function useGroupChat() {
             const response = await groupChatService.getGroupChats();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response: any) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
@@ -35,7 +35,7 @@ export function useGroupChat() {
             const response = await groupChatService.getGroupChatDetails(chatId);
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response: any) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
