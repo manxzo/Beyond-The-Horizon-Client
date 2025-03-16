@@ -21,7 +21,11 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* Project References */
+    "disableReferencedProjectLoad": false,
+    "disableSolutionSearching": false
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
