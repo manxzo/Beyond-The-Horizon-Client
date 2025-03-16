@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useResource } from "../hooks/useResource";
-import { useSponsor } from "../hooks/useSponsor";
 import { Container } from "../components/ui/container";
 import { Heading } from "../components/ui/heading";
 import { Text } from "../components/ui/text";

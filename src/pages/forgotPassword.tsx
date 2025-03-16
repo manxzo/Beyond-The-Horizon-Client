@@ -42,7 +42,7 @@ const ForgotPassword: React.FC = () => {
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Reset Your Password</CardTitle>
           <CardDescription>
-            Enter your email address and we'll send you a link to reset your password
+            Enter your email address and we&apos;ll send you a link to reset your password
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -65,12 +65,12 @@ const ForgotPassword: React.FC = () => {
                 </svg>
               </div>
               <h3 className="text-lg font-medium">Check Your Email</h3>
-              <p className="text-muted-foreground">
-                We've sent a password reset link to <strong>{email}</strong>. 
+              <p className="text-green-600 mb-4">
+                We&apos;ve sent a password reset link to <strong>{email}</strong>. 
                 Please check your inbox and follow the instructions to reset your password.
               </p>
-              <p className="text-sm text-muted-foreground mt-4">
-                Didn't receive an email? Check your spam folder or{" "}
+              <p className="text-gray-600 mb-4">
+                Didn&apos;t receive an email? Check your spam folder or{" "}
                 <button 
                   onClick={() => setSubmitted(false)} 
                   className="text-primary hover:underline"

@@ -71,8 +71,8 @@ const SponsorDashboard: React.FC = () => {
             <div className="flex flex-col md:flex-row justify-between items-start mb-8">
                 <div>
                     <Heading level="h1" className="mb-2">Sponsor Dashboard</Heading>
-                    <Text className="text-muted-foreground">
-                        Welcome back, {user?.firstName || "Sponsor"}. Here's an overview of your mentoring activities.
+                    <Text className="text-xl mb-6">
+                        Welcome back, {user?.firstName || "Sponsor"}. Here&apos;s an overview of your mentoring activities.
                     </Text>
                 </div>
                 <div className="mt-4 md:mt-0">
@@ -272,7 +272,7 @@ const SponsorDashboard: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="text-center py-10">
-                                    <p className="text-muted-foreground mb-4">You don't have any upcoming sessions.</p>
+                                    <p className="text-muted-foreground mb-4">You don&apos;t have any upcoming sessions.</p>
                                     <Button>Schedule a Session</Button>
                                 </div>
                             )}

@@ -32,7 +32,7 @@ const PublicResources: React.FC = () => {
       <Heading level="h1" className="mb-6">Public Resources</Heading>
       <Text className="mb-8">
         Explore our collection of publicly available resources designed to provide information,
-        support, and guidance. These resources are accessible to everyone, whether you're a
+        support, and guidance. These resources are accessible to everyone, whether you&apos;re a
         registered member or just visiting.
       </Text>
 
@@ -61,19 +61,19 @@ const PublicResources: React.FC = () => {
                     </CardHeader>
                     <CardContent>
                       <Text className="mb-4">
-                        This is a placeholder for a {category === "All" ? "resource" : category.toLowerCase().slice(0, -1)} 
+                        This is a placeholder for a {category === "All" ? "resource" : category.toLowerCase().slice(0, -1)}
                         that provides valuable information and support.
                       </Text>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">
                           {new Date().toLocaleDateString()}
                         </span>
-                        <a 
-                          href="#" 
-                          className="text-primary hover:underline"
+                        <button
+                          onClick={() => {/* Add action here */}}
+                          className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0"
                         >
                           Read More
-                        </a>
+                        </button>
                       </div>
                     </CardContent>
                   </Card>

@@ -188,7 +188,7 @@ const Mentees: React.FC = () => {
                         </div>
                     ) : (
                         <div className="text-center py-10">
-                            <p className="text-muted-foreground mb-4">You don't have any mentees yet.</p>
+                            <p className="text-muted-foreground mb-4">You don&apos;t have any mentees yet.</p>
                             <Button variant="outline" onClick={() => setActiveTab("pending")}>
                                 Check Pending Requests
                             </Button>
@@ -221,9 +221,9 @@ const Mentees: React.FC = () => {
                                     <CardContent>
                                         <div className="space-y-4">
                                             <div>
-                                                <h4 className="text-sm font-medium mb-1">Why they're seeking mentorship:</h4>
-                                                <p className="text-sm text-muted-foreground">
-                                                    This is a placeholder for the mentee's reason for seeking mentorship.
+                                                <h4 className="text-sm font-medium mb-1">Why they&apos;re seeking mentorship:</h4>
+                                                <p className="text-sm text-muted-foreground mb-4">
+                                                    This is a placeholder for the mentee&apos;s reason for seeking mentorship.
                                                     They would explain their goals, challenges, and what they hope to gain
                                                     from the mentorship relationship.
                                                 </p>
@@ -260,7 +260,7 @@ const Mentees: React.FC = () => {
                         </div>
                     ) : (
                         <div className="text-center py-10">
-                            <p className="text-muted-foreground">You don't have any pending mentorship requests.</p>
+                            <p className="text-muted-foreground">You don&apos;t have any pending mentorship requests.</p>
                         </div>
                     )}
                 </TabsContent>

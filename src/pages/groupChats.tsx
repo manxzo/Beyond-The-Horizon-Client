@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Avatar } from "../components/ui/avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Spinner } from "../components/ui/spinner";
 import { ScrollArea } from "../components/ui/scroll-area";
 
@@ -120,6 +119,13 @@ const GroupChats: React.FC = () => {
                                         className={`flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-muted ${selectedChat?.id === `chat-${item}` ? "bg-muted" : ""
                                             }`}
                                         onClick={() => setSelectedChat({ id: `chat-${item}`, name: `Group Chat ${item}` })}
+                                        role="button"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                setSelectedChat({ id: `chat-${item}`, name: `Group Chat ${item}` });
+                                            }
+                                        }}
                                     >
                                         <Avatar fallback={`G${item}`} />
                                         <div className="flex-1 min-w-0">
@@ -171,8 +177,8 @@ const GroupChats: React.FC = () => {
                                                             )}
                                                             <div
                                                                 className={`p-3 rounded-lg ${isCurrentUser
-                                                                        ? "bg-primary text-primary-foreground"
-                                                                        : "bg-muted"
+                                                                    ? "bg-primary text-primary-foreground"
+                                                                    : "bg-muted"
                                                                     }`}
                                                             >
                                                                 <p>This is a placeholder message in the group chat.</p>

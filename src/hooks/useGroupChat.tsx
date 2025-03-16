@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { groupChatService, ApiResponse } from '../services/services';
 
 // Define interfaces to match server types

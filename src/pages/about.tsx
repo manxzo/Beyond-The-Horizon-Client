@@ -71,7 +71,7 @@ const About: React.FC = () => {
         </CardHeader>
         <CardContent>
           <Text className="mb-4">
-            Whether you're seeking support or looking to become a mentor, Beyond The Horizon 
+            Whether you&apos;re seeking support or looking to become a mentor, Beyond The Horizon 
             welcomes you to our community of growth and healing.
           </Text>
           {!user && (

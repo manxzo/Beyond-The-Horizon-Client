@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import { adminService, ApiResponse } from '../../services/services';
 
 export function useAdminStats() {
