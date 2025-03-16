@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { tokenManager } from '../services/services';
+import { tokenManager, wsService } from '../services/services';
 import { addToast } from "@heroui/react";
 
 // Define the shape of our WebSocket context
@@ -25,9 +25,6 @@ export const useWebSocket = () => useContext(WebSocketContext);
 interface WebSocketProviderProps {
     children: React.ReactNode;
 }
-
-// Get the WebSocket URL from environment variables or use a default
-const WS_URL = import.meta.env.VITE_WS_URL || 'wss://bth-server-ywjx.shuttle.app/ws/connect';
 
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     // State to track connection status
@@ -61,8 +58,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         }
 
         try {
+            // Get WebSocket URL and protocol from wsService
+            const wsUrl = wsService.getWebSocketUrl();
+            const wsProtocol = wsService.getWebSocketProtocol();
+
             // Create a new WebSocket connection with the token in the protocol
-            wsRef.current = new WebSocket(WS_URL, [`token-${token}`]);
+            wsRef.current = new WebSocket(wsUrl, wsProtocol);
 
             // Set up event handlers
             wsRef.current.onopen = () => {

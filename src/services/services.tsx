@@ -1069,6 +1069,75 @@ export const adminService = {
     },
 };
 
+// ==================== WEBSOCKET SERVICES ====================
+export const wsService = {
+    // Helper function to get the WebSocket URL with token
+    getWebSocketUrl: (): string => {
+        const baseWsUrl = import.meta.env.VITE_WS_URL || 'wss://bth-server-ywjx.shuttle.app/ws/connect';
+        return baseWsUrl;
+    },
+
+    // Helper function to get the WebSocket protocol with token
+    getWebSocketProtocol: (): string[] => {
+        const token = tokenManager.getToken();
+        if (!token) {
+            throw new Error('No authentication token available');
+        }
+        return [`token-${token}`];
+    },
+
+    // POST /ws/send-user - Send a message to a specific user
+    sendToUser: async (userId: string, payload: any): Promise<ApiResponse<any>> => {
+        try {
+            const response = await api.post('/ws/send-user', {
+                user_id: userId,
+                payload
+            });
+            return response;
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    // POST /ws/send-users - Send a message to multiple users
+    sendToUsers: async (userIds: string[], payload: any): Promise<ApiResponse<any>> => {
+        try {
+            const response = await api.post('/ws/send-users', {
+                user_ids: userIds,
+                payload
+            });
+            return response;
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    // POST /ws/send-role - Send a message to all users with a specific role
+    sendToRole: async (role: string, payload: any): Promise<ApiResponse<any>> => {
+        try {
+            const response = await api.post('/ws/send-role', {
+                role,
+                payload
+            });
+            return response;
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    // POST /ws/send-all - Send a message to all connected users
+    sendToAll: async (payload: any): Promise<ApiResponse<any>> => {
+        try {
+            const response = await api.post('/ws/send-all', {
+                payload
+            });
+            return response;
+        } catch (error) {
+            throw error;
+        }
+    }
+};
+
 // Add this utility function at the top of your file
 const debounce = <T extends (...args: any[]) => Promise<any>>(fn: T, ms = 300) => {
     let timeoutId: ReturnType<typeof setTimeout>;
