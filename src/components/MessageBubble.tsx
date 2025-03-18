@@ -154,19 +154,20 @@ export default function MessageBubble({
                             : 'bg-default-100'
                             }`}
                     >
-                        <p className="whitespace-pre-wrap break-words">{!message.deleted ? message.content:"Deleted Message"}</p>
+                        <p className={`whitespace-pre-wrap break-words ${message.deleted && "text-red-500"}`}>{!message.deleted ? message.content:"*Deleted Message*"}</p>
                         {message.edited && (
                             <span className="text-tiny opacity-70 ml-1">(edited)</span>
                         )}
                         
                     </div>
-                    <span className="text-tiny text-default-400 mt-1">
+                    <span className="text-tiny text-default-400 mt-1 flex flex-row gap-2">
+                    {(isCurrentUser && message.seen_at) && <EyeIcon size={15}/>}
                         {new Date(message.timestamp).toLocaleTimeString(undefined, {
                             hour: '2-digit',
                             minute: '2-digit',
-                            timeZone: getLocalTimeZone()
+                            
                         })}
-                        {message.seen_at && <EyeIcon size={8}/>}
+                        
                     </span>
                 </div>
             </div>
