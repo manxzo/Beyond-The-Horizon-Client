@@ -73,7 +73,7 @@ export default function AdminReports() {
             });
 
             await handleReport({
-                reportId: selectedReport.report_id,
+                reportId: selectedReport.id,
                 actionTaken: `Banned user for ${banDuration === "permanent" ? 'permanently' : banDuration + ' days'}: ${banReason}`,
                 resolved: true
             });
@@ -163,11 +163,11 @@ export default function AdminReports() {
                 ) : (
                     <div className="grid grid-cols-1 gap-6">
                         {reports?.map((report: any) => (
-                            <Card key={report.report_id} className="shadow-sm">
+                            <Card key={report.id} className="shadow-sm">
                                 <CardHeader className="flex justify-between items-center">
                                     <div>
                                         <h3 className="text-xl font-medium">
-                                            Report #{report.report_id.substring(0, 8)}
+                                            Report #{report.id.substring(0, 8)}
                                         </h3>
                                         <div className="flex gap-2 mt-1">
                                             <Badge color={getBadgeColor(report.report_type)} variant="flat">
@@ -236,7 +236,7 @@ export default function AdminReports() {
                                             onPress={() => {
                                                 setSelectedReport({
                                                     ...report,
-                                                    report_id: report.id
+                                                    id: report.id
                                                 });
                                                 setShowBanForm(true);
                                                 onOpen();
