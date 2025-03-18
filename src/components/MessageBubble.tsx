@@ -165,7 +165,7 @@ export default function MessageBubble({
                         {new Date(message.timestamp).toLocaleTimeString(undefined, {
                             hour: '2-digit',
                             minute: '2-digit',
-                            
+                            timeZone:getLocalTimeZone(),
                         })}
                         
                     </span>
