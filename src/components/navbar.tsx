@@ -30,7 +30,7 @@ import {
 
 import { siteConfig } from "@/config/site";
 import { ThemeSwitch } from "@/components/theme-switch";
-import { Logo } from "@/components/icons";
+import { BthIcon } from "@/components/icons";
 import { useUser } from "@/hooks/useUser";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
@@ -63,7 +63,7 @@ export const Navbar = () => {
             color="foreground"
             href="/"
           >
-            <Logo />
+            <BthIcon size={48} />
             <p className="font-bold text-inherit">{siteConfig.name}</p>
           </Link>
         </NavbarBrand>
