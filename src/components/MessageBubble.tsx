@@ -16,7 +16,7 @@ import {
     useDisclosure
 } from "@heroui/react";
 import { getLocalTimeZone } from "@internationalized/date";
-import { MoreVertical, Edit, Trash, Flag } from "lucide-react";
+import { MoreVertical, Edit, Trash, Flag,EyeIcon } from "lucide-react";
 import { useMessage } from "../hooks/useMessage";
 import { useReport } from "../hooks/useReport";
 import { ReportedType } from "../interfaces/enums";
@@ -154,10 +154,11 @@ export default function MessageBubble({
                             : 'bg-default-100'
                             }`}
                     >
-                        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                        <p className="whitespace-pre-wrap break-words">{!message.deleted ? message.content:"Deleted Message"}</p>
                         {message.edited && (
                             <span className="text-tiny opacity-70 ml-1">(edited)</span>
                         )}
+                        
                     </div>
                     <span className="text-tiny text-default-400 mt-1">
                         {new Date(message.timestamp).toLocaleTimeString(undefined, {
@@ -165,6 +166,7 @@ export default function MessageBubble({
                             minute: '2-digit',
                             timeZone: getLocalTimeZone()
                         })}
+                        {message.seen_at && <EyeIcon size={8}/>}
                     </span>
                 </div>
             </div>
