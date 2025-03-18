@@ -27,23 +27,60 @@ import {
 import DefaultLayout from "../layouts/default";
 import { useMeeting } from "../hooks/useMeeting";
 import { useUser } from "../hooks/useUser";
-
-// Define meeting status types
-type MeetingStatus = 'upcoming' | 'ongoing' | 'ended';
-
-
+import { MeetingStatus } from "../interfaces/enums";
+import { userService } from "../services/services";
 
 // Define participant interface
 interface MeetingParticipant {
     meeting_id: string;
     user_id: string;
+    username?: string;
+    avatar_url?: string;
+    email?: string;
+    is_host?: boolean;
 }
+
+// Function to get user details by ID
+const getUserDetailsById = async (userId: string) => {
+    try {
+        const response = await userService.getUserById(userId);
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching user ${userId} details:`, error);
+        return null;
+    }
+};
+
+// Process participants with user details
+const fetchParticipantsDetails = async (participants: MeetingParticipant[], hostId: string) => {
+    try {
+        const participantsWithDetails = await Promise.all(
+            participants.map(async (participant) => {
+                const userDetails = await getUserDetailsById(participant.user_id);
+                return {
+                    ...participant,
+                    username: userDetails?.username || 'Unknown User',
+                    avatar_url: userDetails?.avatar_url || '',
+                    email: userDetails?.email || '',
+                    is_host: participant.user_id === hostId
+                };
+            })
+        );
+        console.log(participantsWithDetails);
+        return participantsWithDetails;
+    } catch (error) {
+        console.error('Error fetching participants details:', error);
+        return participants;
+    }
+};
 
 export default function Meeting() {
     const { meetingId } = useParams<{ meetingId: string }>();
     const navigate = useNavigate();
     const [isHost, setIsHost] = useState(false);
     const [isParticipant, setIsParticipant] = useState(false);
+    const [participantsWithDetails, setParticipantsWithDetails] = useState<MeetingParticipant[]>([]);
+    const [isProcessingParticipants, setIsProcessingParticipants] = useState(false);
 
     // Get meeting hooks
     const {
@@ -80,37 +117,64 @@ export default function Meeting() {
         refetch: refetchParticipants,
     } = useQuery(getMeetingParticipants(meetingId || ''));
 
-    // Extract the actual participants data
-    const participants = participantsResponse?.data || [];
+    // Extract the actual participants data and process it
+    useEffect(() => {
+        const processParticipants = async () => {
+            if (participantsResponse && meeting) {
+                setIsProcessingParticipants(true);
+                try {
+                    const participants = participantsResponse|| [];
+                    const hostId = meeting.host_id;
+                    const detailedParticipants = await fetchParticipantsDetails(participants, hostId);
+                    console.log(detailedParticipants);
+                    setParticipantsWithDetails(detailedParticipants);
+                } catch (error) {
+                    console.error('Failed to process participants:', error);
+                } finally {
+                    setIsProcessingParticipants(false);
+                }
+            }
+        };
+
+        processParticipants();
+    }, [participantsResponse, meeting]);
 
     // Check if current user is host or participant
     useEffect(() => {
         if (currentUser && meeting) {
-            setIsHost(currentUser.user_id === meeting.host_id);
-            setIsParticipant(
-                participants.some(
+            // Check if user is host
+            const userIsHost = currentUser.user_id === meeting.host_id;
+            setIsHost(userIsHost);
+
+            // Check if current user is in the participants list
+            const userIsParticipant =
+                Array.isArray(participantsWithDetails) &&
+                participantsWithDetails.some(
                     (participant: MeetingParticipant) => participant.user_id === currentUser.user_id
-                ) || false
-            );
+                );
+
+            setIsParticipant(userIsParticipant);
         }
-    }, [currentUser, meeting, participants]);
+    }, [currentUser, meeting, participantsWithDetails]);
 
     // Handle joining the meeting
     const handleJoinMeeting = () => {
-        if (meetingId) {
+        if (meetingId && currentUser) {
             joinMeeting(meetingId);
             setTimeout(() => {
                 refetchParticipants();
+                refetchMeeting();
             }, 1000);
         }
     };
 
     // Handle leaving the meeting
     const handleLeaveMeeting = () => {
-        if (meetingId) {
+        if (meetingId && currentUser) {
             leaveMeeting(meetingId);
             setTimeout(() => {
                 refetchParticipants();
+                refetchMeeting();
             }, 1000);
         }
     };
@@ -166,12 +230,12 @@ export default function Meeting() {
     // Get status badge based on meeting status
     const getStatusBadge = (status: MeetingStatus) => {
         switch (status) {
-            case 'upcoming':
-                return <Badge color="warning">Upcoming</Badge>;
-            case 'ongoing':
-                return <Badge color="success">Ongoing</Badge>;
-            case 'ended':
-                return <Badge color="default">Ended</Badge>;
+            case MeetingStatus.Upcoming:
+                return <Badge color="primary" variant="flat">Upcoming</Badge>;
+            case MeetingStatus.Ongoing:
+                return <Badge color="success" variant="flat">Ongoing</Badge>;
+            case MeetingStatus.Ended:
+                return <Badge color="default" variant="flat">Ended</Badge>;
             default:
                 return null;
         }
@@ -189,7 +253,7 @@ export default function Meeting() {
         return diffMinutes <= 15;
     };
 
-    if (isLoadingMeeting || isLoadingParticipants) {
+    if (isLoadingMeeting || isLoadingParticipants || isProcessingParticipants) {
         return (
             <DefaultLayout>
                 <div className="flex justify-center items-center h-[70vh]">
@@ -237,10 +301,15 @@ export default function Meeting() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                     <div className="flex items-center gap-3">
                         <h1 className="text-3xl font-bold">{meeting.title}</h1>
-                        {meeting.status && getStatusBadge(meeting.status)}
+                        <div className="flex flex-wrap gap-2">
+                            {meeting.status && getStatusBadge(meeting.status)}
+                            {isParticipant && (
+                                <Chip color="success" size="sm" variant="flat">You&apos;ve Joined</Chip>
+                            )}
+                        </div>
                     </div>
                     <div className="flex gap-2">
-                        {isHost && meeting.status === 'upcoming' && (
+                        {isHost && meeting.status === MeetingStatus.Upcoming && (
                             <Button
                                 color="success"
                                 startContent={<Play size={18} />}
@@ -251,7 +320,7 @@ export default function Meeting() {
                                 Start Meeting
                             </Button>
                         )}
-                        {isHost && meeting.status === 'ongoing' && (
+                        {isHost && meeting.status === MeetingStatus.Ongoing && (
                             <Button
                                 color="danger"
                                 variant="flat"
@@ -261,7 +330,7 @@ export default function Meeting() {
                                 End Meeting
                             </Button>
                         )}
-                        {!isParticipant && meeting.status !== 'ended' && (
+                        {!isParticipant && meeting.status !== MeetingStatus.Ended && (
                             <Button
                                 color="primary"
                                 onPress={handleJoinMeeting}
@@ -270,7 +339,7 @@ export default function Meeting() {
                                 Join Meeting
                             </Button>
                         )}
-                        {isParticipant && meeting.status !== 'ended' && !isHost && (
+                        {isParticipant && meeting.status !== MeetingStatus.Ended && !isHost && (
                             <Button
                                 color="danger"
                                 variant="flat"
@@ -303,7 +372,7 @@ export default function Meeting() {
                             </CardBody>
                         </Card>
 
-                        {meeting.status === 'ongoing' && meeting.meeting_chat_id && (
+                        {meeting.status === MeetingStatus.Ongoing && meeting.meeting_chat_id && (
                             <Card className="mb-6 border border-success">
                                 <CardHeader>
                                     <h3 className="text-xl font-semibold flex items-center gap-2">
@@ -331,7 +400,7 @@ export default function Meeting() {
                             </Card>
                         )}
 
-                        {meeting.status === 'upcoming' && (
+                        {meeting.status === MeetingStatus.Upcoming && (
                             <Card className="mb-6">
                                 <CardHeader>
                                     <h3 className="text-xl font-semibold flex items-center gap-2">
@@ -348,6 +417,11 @@ export default function Meeting() {
                                             " You can start the meeting now."
                                         )}
                                     </p>
+
+                                    {isParticipant && !isHost && (
+                                        <Chip color="success" className="mt-4">You&apos;re registered for this meeting</Chip>
+                                    )}
+
                                     {isAboutToStart(meeting.scheduled_time) && isHost && (
                                         <Button
                                             color="success"
@@ -363,7 +437,7 @@ export default function Meeting() {
                             </Card>
                         )}
 
-                        {meeting.status === 'ended' && (
+                        {meeting.status === MeetingStatus.Ended && (
                             <Card className="mb-6">
                                 <CardHeader>
                                     <h3 className="text-xl font-semibold flex items-center gap-2">
@@ -388,14 +462,14 @@ export default function Meeting() {
                                 <h3 className="text-xl font-semibold flex items-center gap-2">
                                     <Users size={18} />
                                     <span>Participants</span>
-                                    <span className="ml-1 text-small">({participants.length || 0})</span>
+                                    <span className="ml-1 text-small">({participantsWithDetails.length || 0})</span>
                                 </h3>
                             </CardHeader>
                             <Divider />
                             <CardBody>
-                                {participants.length > 0 ? (
+                                {participantsWithDetails.length > 0 ? (
                                     <div className="flex flex-col gap-4">
-                                        {participants.map((participant: MeetingParticipant) => (
+                                        {participantsWithDetails.map((participant: MeetingParticipant) => (
                                             <ParticipantItem
                                                 key={participant.user_id}
                                                 userId={participant.user_id}
@@ -410,18 +484,30 @@ export default function Meeting() {
                                     </div>
                                 )}
                             </CardBody>
-                            {!isParticipant && meeting.status !== 'ended' && (
+                            {meeting.status !== MeetingStatus.Ended && (
                                 <>
                                     <Divider />
                                     <CardFooter>
-                                        <Button
-                                            color="primary"
-                                            fullWidth
-                                            onPress={handleJoinMeeting}
-                                            isLoading={isJoiningMeeting}
-                                        >
-                                            Join Meeting
-                                        </Button>
+                                        {!isParticipant ? (
+                                            <Button
+                                                color="primary"
+                                                fullWidth
+                                                onPress={handleJoinMeeting}
+                                                isLoading={isJoiningMeeting}
+                                            >
+                                                Join Meeting
+                                            </Button>
+                                        ) : !isHost && (
+                                            <Button
+                                                color="danger"
+                                                variant="flat"
+                                                fullWidth
+                                                onPress={handleLeaveMeeting}
+                                                isLoading={isLeavingMeeting}
+                                            >
+                                                Leave Meeting
+                                            </Button>
+                                        )}
                                     </CardFooter>
                                 </>
                             )}
@@ -435,29 +521,39 @@ export default function Meeting() {
 
 // Host info component
 function HostInfo({ hostId }: { hostId: string }) {
-    const { currentUser } = useUser();
+    const [hostData, setHostData] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [error, setError] = useState<string | null>(null);
 
-    // Use a direct query for the user data
-    const { data: hostDataResponse, isLoading } = useQuery({
-        queryKey: ['userById', hostId],
-        queryFn: async () => {
-            // This is a simplified approach - in a real app, you'd use a proper API call
-            // For now, we'll just check if the current user is the host
-            if (currentUser && currentUser.user_id === hostId) {
-                return { data: currentUser };
+    // Fetch host data when component mounts
+    useEffect(() => {
+        const fetchHostData = async () => {
+            try {
+                setIsLoading(true);
+                const result = await getUserDetailsById(hostId);
+                setHostData(result);
+                setIsLoading(false);
+            } catch (err) {
+                console.error(`Failed to fetch host ${hostId} details:`, err);
+                setError(`Failed to load host information`);
+                setIsLoading(false);
             }
+        };
 
-            // In a real implementation, you would fetch the user data from the API
-            return { data: { username: 'Host', avatar_url: '' } };
-        },
-    });
+        fetchHostData();
+    }, [hostId]);
 
-    const hostData = hostDataResponse?.data;
-
-    if (isLoading || !hostData) {
+    if (isLoading) {
         return <div className="flex items-center gap-2">
             <Spinner size="sm" />
             <span>Loading host info...</span>
+        </div>;
+    }
+
+    if (error || !hostData) {
+        return <div className="flex items-center gap-2 text-danger">
+            <AlertTriangle size={18} />
+            <span>{error || "Error loading host data"}</span>
         </div>;
     }
 
@@ -470,6 +566,9 @@ function HostInfo({ hostId }: { hostId: string }) {
             />
             <div>
                 <p className="font-semibold">{hostData.username || 'Host'}</p>
+                {hostData.email && (
+                    <p className="text-tiny text-default-500">{hostData.email}</p>
+                )}
                 <p className="text-tiny text-default-500">Meeting Host</p>
             </div>
         </div>
@@ -478,29 +577,39 @@ function HostInfo({ hostId }: { hostId: string }) {
 
 // Participant item component
 function ParticipantItem({ userId, isHost }: { userId: string; isHost: boolean }) {
-    const { currentUser } = useUser();
+    const [userData, setUserData] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [error, setError] = useState<string | null>(null);
 
-    // Use a direct query for the user data
-    const { data: userDataResponse, isLoading } = useQuery({
-        queryKey: ['userById', userId],
-        queryFn: async () => {
-            // This is a simplified approach - in a real app, you'd use a proper API call
-            // For now, we'll just check if the current user is the participant
-            if (currentUser && currentUser.user_id === userId) {
-                return { data: currentUser };
+    // Fetch user data when component mounts
+    useEffect(() => {
+        const fetchUserData = async () => {
+            try {
+                setIsLoading(true);
+                const result = await getUserDetailsById(userId);
+                setUserData(result);
+                setIsLoading(false);
+            } catch (err) {
+                console.error(`Failed to fetch user ${userId} details:`, err);
+                setError(`Failed to load user information`);
+                setIsLoading(false);
             }
+        };
 
-            // In a real implementation, you would fetch the user data from the API
-            return { data: { username: isHost ? 'Host' : 'Participant', avatar_url: '' } };
-        },
-    });
+        fetchUserData();
+    }, [userId]);
 
-    const userData = userDataResponse?.data;
-
-    if (isLoading || !userData) {
+    if (isLoading) {
         return <div className="flex items-center gap-2">
             <Spinner size="sm" />
             <span>Loading participant info...</span>
+        </div>;
+    }
+
+    if (error || !userData) {
+        return <div className="flex items-center gap-2 text-danger">
+            <AlertTriangle size={18} />
+            <span>{error || "Error loading user data"}</span>
         </div>;
     }
 
@@ -513,6 +622,9 @@ function ParticipantItem({ userId, isHost }: { userId: string; isHost: boolean }
             />
             <div className="flex-grow">
                 <p className="font-semibold">{userData.username || 'User'}</p>
+                {userData.email && (
+                    <p className="text-tiny text-default-500">{userData.email}</p>
+                )}
                 {isHost && (
                     <p className="text-tiny text-default-500">Meeting Host</p>
                 )}

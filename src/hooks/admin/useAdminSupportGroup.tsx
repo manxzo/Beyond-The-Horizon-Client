@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminService, ApiResponse } from '../../services/services';
+import { adminService } from '../../services/services';
+import { SupportGroupStatus } from '../../interfaces/enums';
 
 export function useAdminSupportGroup() {
     const queryClient = useQueryClient();
@@ -10,7 +11,7 @@ export function useAdminSupportGroup() {
 
     /**
      * Get all pending support groups
-     * Route: /api/admin/support-groups/pending
+     * Route: /api/protected/admin/support-groups/pending
      */
     const getPendingSupportGroups = () => ({
         queryKey: QUERY_KEYS.pendingSupportGroups,
@@ -18,15 +19,13 @@ export function useAdminSupportGroup() {
             const response = await adminService.getPendingSupportGroups();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response: any) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
-
-
     /**
      * Review a support group
-     * Route: /api/admin/support-groups/review
+     * Route: /api/protected/admin/support-groups/review
      */
     const reviewSupportGroupMutation = useMutation({
         mutationFn: async ({
@@ -35,19 +34,19 @@ export function useAdminSupportGroup() {
             adminComments,
         }: {
             supportGroupId: string;
-            status: string;
+            status: SupportGroupStatus;
             adminComments?: string;
         }) => {
-            const response = await adminService.reviewSupportGroup(
+            const response = await adminService.reviewSupportGroup({
                 supportGroupId,
                 status,
-                adminComments
-            );
+                adminComments,
+            });
             return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
-                queryKey: QUERY_KEYS.pendingSupportGroups
+                queryKey: QUERY_KEYS.pendingSupportGroups,
             });
         },
     });

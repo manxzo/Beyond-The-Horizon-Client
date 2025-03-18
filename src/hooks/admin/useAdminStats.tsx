@@ -1,4 +1,4 @@
-import { adminService, ApiResponse } from '../../services/services';
+import { adminService } from '../../services/services';
 
 export function useAdminStats() {
     const QUERY_KEYS = {
@@ -7,7 +7,7 @@ export function useAdminStats() {
 
     /**
      * Get admin dashboard statistics
-     * Route: /api/admin/stats
+     * Route: /api/protected/admin/stats
      */
     const getAdminStats = () => ({
         queryKey: QUERY_KEYS.adminStats,
@@ -16,7 +16,7 @@ export function useAdminStats() {
             const response = await adminService.getAdminStats();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response: any) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 

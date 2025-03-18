@@ -62,7 +62,7 @@ export const siteConfig: SiteConfig = {
       {
         label: "Messages",
         href: "/messages",
-        description: "Access your private messages",
+        description: "Access your private messages and group chats",
       },
       {
         label: "Support Groups",
@@ -70,47 +70,32 @@ export const siteConfig: SiteConfig = {
         description: "Join and participate in support groups",
       },
       {
-        label: "Group Chats",
-        href: "/group-chats",
-        description: "Participate in group conversations",
-      },
-      {
         label: "Resources",
         href: "/resources",
-        description: "Access member-only resources and materials",
+        description: "Access helpful resources and materials",
       },
       {
         label: "Profile",
         href: "/profile",
         description: "View and edit your profile",
       },
-      {
-        label: "Meetings",
-        href: "/meetings",
-        description: "Schedule and join meetings",
-      },
     ],
     // Sponsor-specific navigation items (only for sponsors)
     sponsor: [
       {
         label: "Dashboard",
-        href: "/sponsor-dashboard",
+        href: "/sponsor",
         description: "View your sponsor dashboard and analytics",
       },
       {
+        label: "Mentee Requests",
+        href: "/sponsor/requests",
+        description: "Review and respond to mentee requests",
+      },
+      {
         label: "My Mentees",
-        href: "/mentees",
+        href: "/sponsor/mentees",
         description: "Manage your mentee relationships",
-      },
-      {
-        label: "Mentoring Sessions",
-        href: "/mentoring-sessions",
-        description: "Schedule and manage mentoring sessions",
-      },
-      {
-        label: "Matching",
-        href: "/matching",
-        description: "Find and match with potential mentees",
       },
     ],
     // Admin-specific navigation items
@@ -126,16 +111,6 @@ export const siteConfig: SiteConfig = {
         description: "Manage user accounts and permissions",
       },
       {
-        label: "Reports",
-        href: "/admin/reports",
-        description: "View and manage system reports",
-      },
-      {
-        label: "Sponsor Applications",
-        href: "/admin/sponsors",
-        description: "Review and process sponsor applications",
-      },
-      {
         label: "Support Groups",
         href: "/admin/support-groups",
         description: "Manage and moderate support groups",
@@ -144,6 +119,16 @@ export const siteConfig: SiteConfig = {
         label: "Resources",
         href: "/admin/resources",
         description: "Manage platform resources and content",
+      },
+      {
+        label: "Sponsor Applications",
+        href: "/admin/sponsor-applications",
+        description: "Review and process sponsor applications",
+      },
+      {
+        label: "Reports",
+        href: "/admin/reports",
+        description: "View and manage system reports",
       },
       {
         label: "Statistics",

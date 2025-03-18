@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
     Card,
     CardHeader,
@@ -21,6 +20,7 @@ import {
     useDisclosure,
     Select,
     SelectItem,
+    addToast,
 } from "@heroui/react";
 import {
     User,
@@ -29,13 +29,12 @@ import {
     Calendar,
     Heart,
     Upload,
-    RefreshCw,
-    Trash,
     AlertTriangle,
     Save,
-    X,
     CheckCircle,
+    Eye,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import DefaultLayout from "../layouts/default";
 import { useUser } from "../hooks/useUser";
@@ -71,6 +70,7 @@ const COMMON_LANGUAGES = [
 export default function Profile() {
     // Refs
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const navigate = useNavigate();
 
     // State for profile data
     const [bio, setBio] = useState("");
@@ -81,7 +81,7 @@ export default function Profile() {
     const [availableDays, setAvailableDays] = useState<string[]>([]);
     const [languages, setLanguages] = useState<string[]>([]);
     const [privacy, setPrivacy] = useState(false);
-    const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+    const [location, setLocation] = useState<{ latitude: number; longitude: number; country: string } | null>(null);
     const [isLoadingLocation, setIsLoadingLocation] = useState(false);
     const [locationError, setLocationError] = useState("");
 
@@ -145,6 +145,7 @@ export default function Profile() {
             setLocation({
                 latitude: parseFloat(data.latitude),
                 longitude: parseFloat(data.longitude),
+                country: data.country_name,
             });
         } catch (error) {
             console.error("Error fetching location:", error);
@@ -216,43 +217,110 @@ export default function Profile() {
 
     // Handle avatar upload
     const handleUploadAvatar = async () => {
-        if (!avatarFile) return;
+        if (!avatarFile) {
+            console.error("No avatar file selected");
+            return;
+        }
 
-        await updateAvatar(avatarFile, {
-            onSuccess: () => {
-                setAvatarFile(null);
-                setAvatarPreview(null);
-                refetchUser();
-            },
-        });
+        try {
+            console.log("Uploading avatar file:", avatarFile);
+            await updateAvatar(avatarFile, {
+                onSuccess: () => {
+                    setAvatarFile(null);
+                    setAvatarPreview(null);
+
+                    // Force a refetch of user data to update the avatar URL
+                    refetchUser().then(() => {
+                        // Add a toast notification to inform the user
+                        addToast({
+                            title: "Avatar Updated",
+                            description: "Your profile picture has been successfully updated.",
+                            color: "success",
+                        });
+                    });
+                },
+                onError: (error: any) => {
+                    console.error("Avatar upload failed:", error);
+                    // Add a toast notification to inform the user
+                    addToast({
+                        title: "Upload Failed",
+                        description: "Failed to update your profile picture. Please try again.",
+                        color: "danger",
+                    });
+                }
+            });
+        } catch (error) {
+            console.error("Error in handleUploadAvatar:", error);
+            addToast({
+                title: "Upload Error",
+                description: "An unexpected error occurred. Please try again later.",
+                color: "danger",
+            });
+        }
     };
 
     // Handle avatar reset
     const handleResetAvatar = async () => {
-        await resetAvatar();
-        setAvatarFile(null);
-        setAvatarPreview(null);
-        refetchUser();
+        try {
+            await resetAvatar();
+            setAvatarFile(null);
+            setAvatarPreview(null);
+
+            // Force a refetch of user data to update the avatar URL
+            refetchUser().then(() => {
+                // Add a toast notification to inform the user
+                addToast({
+                    title: "Avatar Reset",
+                    description: "Your profile picture has been reset to the default avatar.",
+                    color: "success",
+                });
+            });
+        } catch (error) {
+            console.error("Error resetting avatar:", error);
+            addToast({
+                title: "Reset Failed",
+                description: "Failed to reset your profile picture. Please try again.",
+                color: "danger",
+            });
+        }
     };
 
     // Handle profile update
     const handleUpdateProfile = async () => {
-        await updateProfile({
-            bio,
-            interests,
-            experience,
-            available_days: availableDays,
-            languages,
-            privacy,
-            location,
-        });
+        try {
+            await updateProfile({
+                bio,
+                interests: interests.length > 0 ? interests : undefined,
+                experience: experience.length > 0 ? experience : undefined,
+                available_days: availableDays.length > 0 ? availableDays : undefined,
+                languages: languages.length > 0 ? languages : undefined,
+                privacy,
+                location,
+            });
 
-        onSuccessModalOpen();
+            // Force a refetch to ensure we have the latest data
+            await refetchUser();
+            onSuccessModalOpen();
+        } catch (error) {
+            console.error("Error updating profile:", error);
+            addToast({
+                title: "Update Failed",
+                description: "Failed to update your profile. Please try again.",
+                color: "danger",
+            });
+        }
     };
 
     // Handle account deletion
     const handleDeleteAccount = async () => {
         await deleteAccount();
+    };
+
+    // Add this function to view public profile
+    const handleViewPublicProfile = () => {
+        if (currentUser?.username) {
+            navigate(`/users/${currentUser.username}`);
+        }
     };
 
     if (!currentUser) {
@@ -270,6 +338,14 @@ export default function Profile() {
             <div className="py-8">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold">My Profile</h1>
+                    <Button
+                        color="secondary"
+                        variant="light"
+                        startContent={<Eye size={18} />}
+                        onPress={handleViewPublicProfile}
+                    >
+                        View Public Profile
+                    </Button>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -287,14 +363,14 @@ export default function Profile() {
                                         isIconOnly
                                         variant="flat"
                                         color="default"
-                                        className="bg-white bg-opacity-80"
+                                        className=" bg-opacity-80"
                                         onPress={() => fileInputRef.current?.click()}
                                     >
                                         <Upload size={20} />
                                     </Button>
                                 </div>
                             </div>
-                            <input
+                            <Input
                                 type="file"
                                 ref={fileInputRef}
                                 className="hidden"
@@ -419,6 +495,7 @@ export default function Profile() {
                                         <div className="mb-2">
                                             <p>Latitude: {location.latitude}</p>
                                             <p>Longitude: {location.longitude}</p>
+                                            <p>Country: {location.country}</p>
                                         </div>
                                     ) : (
                                         <p className="text-default-500 mb-2">No location set</p>

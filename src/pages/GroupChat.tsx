@@ -26,6 +26,9 @@ import {
 import DefaultLayout from "../layouts/default";
 import { useGroupChat } from "../hooks/useGroupChat";
 import { useUser } from "../hooks/useUser";
+import { useUnreadMessages } from "../hooks/useUnreadMessages";
+// Import WebSocket context
+import { useWebSocket, MessageType } from "../contexts/WebSocketContext";
 
 import MessageBubble from "../components/MessageBubble";
 
@@ -37,23 +40,30 @@ export default function GroupChat() {
   const [newMessage, setNewMessage] = useState("");
   const [isMeetingChat, setIsMeetingChat] = useState(false);
   const [meetingId, setMeetingId] = useState<string | null>(null);
+ 
 
   // Get group chat hooks
   const {
     getGroupChatDetails,
     sendGroupChatMessage,
     isSendingGroupChatMessage: isSendingMessage,
-
   } = useGroupChat();
 
   // Get user hooks
   const { currentUser } = useUser();
+
+  // Get unread message functions
+  const { markGroupChatAsRead, handleNewMessage } = useUnreadMessages();
+
+  // Get WebSocket context
+  const { addMessageListener } = useWebSocket();
 
   // Fetch group chat details
   const {
     data: chatDetailsResponse,
     isLoading: isLoadingChatDetails,
     error: chatDetailsError,
+    refetch: refetchChatDetails,
   } = useQuery(getGroupChatDetails(chatId || ''));
 
   // Extract the actual chat details data from the response
@@ -62,6 +72,43 @@ export default function GroupChat() {
   // Access the chat properties
   const messages = chatDetails?.messages || [];
   const members = chatDetails?.members || [];
+
+  // Mark group chat as read when component mounts or chatId changes
+  useEffect(() => {
+    if (chatId) {
+      markGroupChatAsRead(chatId);
+    }
+  }, [chatId, markGroupChatAsRead]);
+
+  // Set up WebSocket listener for new group messages
+  useEffect(() => {
+    if (!chatId || !currentUser) return;
+
+    // Add listener for group messages
+    const removeGroupMessageListener = addMessageListener(MessageType.GROUP_MESSAGE, (payload) => {
+      // Check if this message is for the current group chat
+      if (payload.group_chat_id === chatId) {
+        // Update unread message count
+        handleNewMessage(payload);
+        // Refetch chat details to update the UI
+        refetchChatDetails();
+      }
+    });
+
+    // Also listen for meeting updates if this is a meeting chat
+    const removeMeetingUpdateListener = addMessageListener(MessageType.MEETING_UPDATE, (payload) => {
+      if (payload.meeting_id === meetingId) {
+        // Refetch chat details to update the UI
+        refetchChatDetails();
+      }
+    });
+
+    // Clean up listeners when component unmounts
+    return () => {
+      removeGroupMessageListener();
+      removeMeetingUpdateListener();
+    };
+  }, [chatId, meetingId, currentUser, addMessageListener, refetchChatDetails, handleNewMessage]);
 
   // Check if this is a meeting chat
   useEffect(() => {
@@ -105,8 +152,6 @@ export default function GroupChat() {
       navigate(-1);
     }
   };
-
-
 
   // Format date for message grouping
   const formatMessageDate = (dateString: string) => {

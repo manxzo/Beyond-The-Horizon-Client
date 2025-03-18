@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { meetingService, ApiResponse } from '../services/services';
+import { MeetingStatus } from '../interfaces/enums';
 
 // Define interfaces to match server types
 export interface GroupMeeting {
@@ -11,7 +12,7 @@ export interface GroupMeeting {
     title: string;
     description: string | null;
     scheduled_time: string;
-    status: 'upcoming' | 'ongoing' | 'ended';
+    status: MeetingStatus;
     participant_count?: number;
     is_participant?: boolean;
 }
@@ -28,6 +29,7 @@ export function useMeeting() {
         meetingParticipants: (meetingId: string) => ['meetingParticipants', meetingId],
         groupMeetings: (groupId: string) => ['groupMeetings', groupId],
         meeting: (meetingId: string) => ['meeting', meetingId],
+        userMeetings: () => ['userMeetings'],
     };
 
     /**
@@ -44,6 +46,18 @@ export function useMeeting() {
     });
 
     /**
+     * Get all meetings for the current user
+     */
+    const getUserMeetings = () => ({
+        queryKey: QUERY_KEYS.userMeetings(),
+        queryFn: async () => {
+            const response = await meetingService.getUserMeetings();
+            return response;
+        },
+        select: (response: ApiResponse<any>) => response.data,
+    });
+
+    /**
      * Get participants for a specific meeting
      */
     const getMeetingParticipants = (meetingId: string) => ({
@@ -53,11 +67,11 @@ export function useMeeting() {
             const response = await meetingService.getMeetingParticipants(meetingId);
             return response;
         },
-        select: (response: ApiResponse<MeetingParticipant[]>) => response.data,
+        select: (response: any) => response.data,
         enabled: !!meetingId,
     });
 
- 
+
     // Define interfaces to match server types
     interface CreateMeetingRequest {
         title: string;
@@ -76,7 +90,7 @@ export function useMeeting() {
             groupId: string;
             meetingData: CreateMeetingRequest
         }) => {
-            const response = await meetingService.createMeeting( meetingData);
+            const response = await meetingService.createMeeting(meetingData);
             return response.data;
         },
         onSuccess: (_, variables) => {
@@ -166,6 +180,7 @@ export function useMeeting() {
         // Queries
         getMeeting,
         getMeetingParticipants,
+        getUserMeetings,
 
         // Mutations
         createMeeting: createMeetingMutation.mutate,

@@ -1,11 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 import { reportService } from '../services/services';
+import { ReportedType } from '../interfaces/enums';
 
 // Define interfaces to match server types
 interface CreateReportRequest {
     reported_user_id: string;
     reason: string;
-    reported_type: string;
+    reported_type: ReportedType;
     reported_item_id: string;
 }
 

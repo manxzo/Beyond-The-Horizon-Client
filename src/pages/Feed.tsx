@@ -19,31 +19,40 @@ import {
   DropdownMenu,
   DropdownItem,
   Pagination,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+  Badge,
 } from "@heroui/react";
 import {
   Users,
   Calendar,
   MessageSquare,
-  BookOpen,
-  Clock,
-  UserPlus,
-  Heart,
   Send,
   MoreVertical,
   ThumbsUp,
   Edit,
   Trash,
   RefreshCw,
+  Flag,
+  Video,
+  UserCheck,
 } from "lucide-react";
 
 import DefaultLayout from "../layouts/default";
 import { useSupportGroup } from "../hooks/useSupportGroup";
 import { usePost } from "../hooks/usePost";
 import { useUser } from "../hooks/useUser";
-import { useState, useRef, useEffect } from "react";
+import { useReport } from "../hooks/useReport";
+import { useMeeting } from "../hooks/useMeeting";
+import { useState, useEffect } from "react";
 import { postService, userService } from "../services/services";
+import { ReportedType, MeetingStatus } from "../interfaces/enums";
 
-// Define types for our data structures
+
 interface PostAuthor {
   username: string;
   avatar_url: string;
@@ -65,25 +74,35 @@ interface Comment {
   author?: PostAuthor;
 }
 
+interface PostData {
+  post_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  tags: string[];
+}
+
 interface Post {
-  post: {
-    post_id: string;
-    author_id: string;
-    content: string;
-    created_at: string;
-    tags: string[];
-  };
+  post: PostData;
   likes: PostLike[];
   comments: Comment[];
   like_count: number;
   author?: PostAuthor;
 }
 
-interface PostsPage {
-  posts: Post[];
-  page: number;
-  posts_per_page: number;
-  total_count: number;
+
+interface Meeting {
+  meeting_id: string;
+  title: string;
+  description?: string;
+  scheduled_time: string;
+  status: MeetingStatus;
+  support_group_id: string;
+  group_title: string;
+  participant_count: number;
+  is_participant: boolean;
+  is_host: boolean;
+  meeting_chat_id?: string;
 }
 
 export default function Feed() {
@@ -99,23 +118,30 @@ export default function Feed() {
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+  const [searchInput, setSearchInput] = useState("");
+  const [usePagination, setUsePagination] = useState(false);
+
+  // Report state
+  const [reportingItem, setReportingItem] = useState<{ id: string, type: ReportedType, userId: string } | null>(null);
+  const [reportReason, setReportReason] = useState("");
+  const { isOpen: isReportOpen, onOpen: onReportOpen, onClose: onReportClose } = useDisclosure();
 
   // Get support group hooks
   const { getMyGroups } = useSupportGroup();
 
   // Get user hooks
-  const { currentUser, useGetUserById } = useUser();
+  const { currentUser } = useUser();
+
+  // Get meeting hooks
+  const { getUserMeetings } = useMeeting();
 
   // Get post hooks
   const {
-    getPosts,
-    getPost,
     createPost,
     isCreatingPost,
     updatePost,
     isUpdatingPost,
     deletePost,
-    isDeletingPost,
     likePost,
     isLikingPost,
     commentOnPost,
@@ -123,8 +149,10 @@ export default function Feed() {
     updateComment,
     isUpdatingComment,
     deleteComment,
-    isDeletingComment,
   } = usePost();
+
+  // Get report hooks
+  const { createReport, isCreatingReport } = useReport();
 
   // Fetch posts with pagination
   const {
@@ -139,7 +167,6 @@ export default function Feed() {
     queryKey: ['posts', 'filtered', page, searchTags, sortBy],
     queryFn: async ({ pageParam = 1 }) => {
       try {
-        // Call the postService directly
         const response = await postService.getPosts(pageParam, searchTags, sortBy);
         return response.data;
       } catch (error) {
@@ -147,7 +174,7 @@ export default function Feed() {
         throw error;
       }
     },
-    getNextPageParam: (lastPage: PostsPage) => {
+    getNextPageParam: (lastPage) => {
       const totalPages = Math.ceil(lastPage.total_count / lastPage.posts_per_page);
       if (lastPage.page < totalPages) {
         return lastPage.page + 1;
@@ -155,17 +182,47 @@ export default function Feed() {
       return undefined;
     },
     initialPageParam: 1,
+    enabled: !usePagination,
+  });
+
+  // Add a new query for paginated posts
+  const {
+    data: paginatedPostsResponse,
+    isLoading: isLoadingPaginatedPosts,
+    error: paginatedPostsError,
+    refetch: refetchPaginatedPosts,
+  } = useQuery({
+    queryKey: ['posts', 'paginated', page, searchTags, sortBy],
+    queryFn: async () => {
+      try {
+        const response = await postService.getPosts(page, searchTags, sortBy);
+        return response.data;
+      } catch (error) {
+        console.error("Error fetching posts:", error);
+        throw error;
+      }
+    },
+    enabled: usePagination, // Only enable this query when using pagination
   });
 
   // Fetch my support groups using the hook
   const {
     data: myGroupsResponse,
     isLoading: isLoadingMyGroups,
-    error: myGroupsError,
+    error: _myGroupsError,
   } = useQuery(getMyGroups());
 
-  // Extract the actual data from the response
-  const myGroups = myGroupsResponse?.data || [];
+  // Fetch my meetings
+  const {
+    data: myMeetingsResponse,
+    isLoading: isLoadingMyMeetings,
+    error: myMeetingsError,
+    refetch: refetchMeetings,
+  } = useQuery(getUserMeetings());
+
+  // Extract the actual data from the responses
+  const myGroups = myGroupsResponse || [];
+  const myMeetings = myMeetingsResponse?.data || [];
 
   // Process posts to include author data
   const [postsWithAuthors, setPostsWithAuthors] = useState<Post[]>([]);
@@ -184,23 +241,39 @@ export default function Feed() {
 
   // Process posts to include author data
   useEffect(() => {
-    if (!postsResponse?.pages) return;
+    if (!postsResponse?.pages && !paginatedPostsResponse) return;
 
     const fetchAuthors = async () => {
       const allPosts: Post[] = [];
 
-      for (const page of postsResponse.pages) {
-        for (const post of page.posts) {
+      if (usePagination && paginatedPostsResponse) {
+        // Process posts from paginated response
+        for (const post of paginatedPostsResponse.posts) {
+          // Determine if we're dealing with a flat or nested structure
+          const isFlat = !post.post;
+          const authorId = isFlat ? post.author_id : post.post.author_id;
+
           // Get author data for the post
-          const authorData = await fetchUserData(post.post.author_id);
-          const postWithAuthor = {
-            ...post,
+          const authorData = await fetchUserData(authorId);
+
+          // Create a properly structured post object
+          const postWithAuthor: Post = {
+            post: isFlat ? {
+              post_id: post.post_id,
+              author_id: post.author_id,
+              content: post.content,
+              created_at: post.created_at,
+              tags: post.tags || []
+            } : post.post,
+            likes: post.likes || [],
+            comments: post.comments || [],
+            like_count: post.like_count || 0,
             author: authorData
           };
 
           // Get author data for all comments
           const commentsWithAuthors = await Promise.all(
-            post.comments.map(async (comment) => {
+            postWithAuthor.comments.map(async (comment: Comment) => {
               const commentAuthorData = await fetchUserData(comment.author_id);
               return {
                 ...comment,
@@ -212,13 +285,54 @@ export default function Feed() {
           postWithAuthor.comments = commentsWithAuthors;
           allPosts.push(postWithAuthor);
         }
+      } else if (postsResponse?.pages) {
+        // Process posts from infinite query response
+        for (const page of postsResponse.pages) {
+          for (const post of page.posts) {
+            // Determine if we're dealing with a flat or nested structure
+            const isFlat = !post.post;
+            const authorId = isFlat ? post.author_id : post.post.author_id;
+
+            // Get author data for the post
+            const authorData = await fetchUserData(authorId);
+
+            // Create a properly structured post object
+            const postWithAuthor: Post = {
+              post: isFlat ? {
+                post_id: post.post_id,
+                author_id: post.author_id,
+                content: post.content,
+                created_at: post.created_at,
+                tags: post.tags || []
+              } : post.post,
+              likes: post.likes || [],
+              comments: post.comments || [],
+              like_count: post.like_count || 0,
+              author: authorData
+            };
+
+            // Get author data for all comments
+            const commentsWithAuthors = await Promise.all(
+              postWithAuthor.comments.map(async (comment: Comment) => {
+                const commentAuthorData = await fetchUserData(comment.author_id);
+                return {
+                  ...comment,
+                  author: commentAuthorData
+                };
+              })
+            );
+
+            postWithAuthor.comments = commentsWithAuthors;
+            allPosts.push(postWithAuthor);
+          }
+        }
       }
 
       setPostsWithAuthors(allPosts);
     };
 
     fetchAuthors();
-  }, [postsResponse]);
+  }, [postsResponse, paginatedPostsResponse, usePagination]);
 
   // Handle navigating to a support group's dashboard
   const handleViewGroup = (groupId: string) => {
@@ -230,10 +344,22 @@ export default function Feed() {
     navigate('/support-groups');
   };
 
+  // Handle navigating to a meeting
+  const handleViewMeeting = (meetingId: string) => {
+    navigate(`/meetings/${meetingId}`);
+  };
+
   // Handle creating a new post
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPostContent.trim()) return;
+
+    // Add validation for minimum content length
+    if (newPostContent.trim().length <= 5) {
+      // Show error message
+      alert("Post content must be more than 5 characters long");
+      return;
+    }
 
     const tags = newPostTags
       .split(",")
@@ -253,11 +379,19 @@ export default function Feed() {
   // Handle liking a post
   const handleLikePost = async (postId: string) => {
     await likePost(postId);
+    // Refetch posts to update the UI with the latest data
+    refetchPosts();
   };
 
   // Handle commenting on a post
   const handleComment = async (postId: string, parentCommentId?: string) => {
     if (!commentContent.trim()) return;
+
+    // Add validation for minimum comment length
+    if (commentContent.trim().length <= 5) {
+      alert("Comment must be more than 5 characters long");
+      return;
+    }
 
     await commentOnPost({
       postId,
@@ -267,11 +401,19 @@ export default function Feed() {
 
     setCommentContent("");
     setReplyingTo(null);
+    // Refetch posts to update the UI with the latest data
+    refetchPosts();
   };
 
   // Handle updating a post
   const handleUpdatePost = async (postId: string) => {
     if (!editContent.trim()) return;
+
+    // Add validation for minimum content length
+    if (editContent.trim().length <= 5) {
+      alert("Post content must be more than 5 characters long");
+      return;
+    }
 
     await updatePost({
       postId,
@@ -280,11 +422,19 @@ export default function Feed() {
 
     setEditingPost(null);
     setEditContent("");
+    // Refetch posts to update the UI with the latest data
+    refetchPosts();
   };
 
   // Handle updating a comment
   const handleUpdateComment = async (commentId: string, postId: string) => {
     if (!editContent.trim()) return;
+
+    // Add validation for minimum content length
+    if (editContent.trim().length <= 5) {
+      alert("Comment must be more than 5 characters long");
+      return;
+    }
 
     await updateComment({
       commentId,
@@ -294,12 +444,15 @@ export default function Feed() {
 
     setEditingComment(null);
     setEditContent("");
+    refetchPosts();
   };
 
   // Handle deleting a post
   const handleDeletePost = async (postId: string) => {
     if (window.confirm("Are you sure you want to delete this post?")) {
       await deletePost(postId);
+      // Refetch posts to update the UI with the latest data
+      refetchPosts();
     }
   };
 
@@ -310,6 +463,8 @@ export default function Feed() {
         commentId,
         postId,
       });
+      // Refetch posts to update the UI with the latest data
+      refetchPosts();
     }
   };
 
@@ -332,6 +487,34 @@ export default function Feed() {
     return date.toLocaleString();
   };
 
+  // Get status badge color based on meeting status
+  const getMeetingStatusColor = (status: MeetingStatus) => {
+    switch (status) {
+      case MeetingStatus.Ongoing:
+        return "success";
+      case MeetingStatus.Upcoming:
+        return "primary";
+      case MeetingStatus.Ended:
+        return "default";
+      default:
+        return "default";
+    }
+  };
+
+  // Get status badge text based on meeting status
+  const getMeetingStatusText = (status: MeetingStatus) => {
+    switch (status) {
+      case MeetingStatus.Ongoing:
+        return "Ongoing";
+      case MeetingStatus.Upcoming:
+        return "Upcoming";
+      case MeetingStatus.Ended:
+        return "Ended";
+      default:
+        return "Unknown";
+    }
+  };
+
   // Render nested comments recursively
   const renderComments = (comments: Comment[], postId: string, parentId: string | null = null) => {
     const filteredComments = comments.filter(
@@ -339,6 +522,11 @@ export default function Feed() {
     );
 
     if (filteredComments.length === 0) return null;
+
+    // Add a function to navigate to user profile
+    const navigateToUserProfile = (username: string) => {
+      navigate(`/users/${username}`);
+    };
 
     return (
       <div className={`space-y-3 ${parentId ? 'ml-6 border-l-2 border-default-200 pl-3' : ''}`}>
@@ -351,20 +539,33 @@ export default function Feed() {
           return (
             <div key={comment.comment_id} className="bg-default-50 rounded-lg p-3">
               <div className="flex items-start gap-2">
-                <Avatar
-                  src={comment.author?.avatar_url}
-                  name={(comment.author?.username || "U").charAt(0).toUpperCase()}
-                  size="sm"
-                />
+                <Button
+                  isIconOnly
+                  variant="light"
+                  className="p-0 min-w-0"
+                  onPress={() => comment.author?.username && navigateToUserProfile(comment.author.username)}
+                >
+                  <Avatar
+                    src={comment.author?.avatar_url}
+                    name={(comment.author?.username || "U").charAt(0).toUpperCase()}
+                    size="sm"
+                  />
+                </Button>
                 <div className="flex-1">
                   <div className="flex justify-between items-start">
                     <div>
-                      <span className="font-semibold">{comment.author?.username || "User"}</span>
+                      <Button
+                        variant="light"
+                        className="p-0 h-auto min-w-0 font-semibold"
+                        onPress={() => comment.author?.username && navigateToUserProfile(comment.author.username)}
+                      >
+                        {comment.author?.username || "User"}
+                      </Button>
                       <span className="text-xs text-default-400 ml-2">
                         {formatDate(comment.created_at)}
                       </span>
                     </div>
-                    {isAuthor && (
+                    {isAuthor ? (
                       <Dropdown>
                         <DropdownTrigger>
                           <Button isIconOnly size="sm" variant="light">
@@ -392,6 +593,24 @@ export default function Feed() {
                           </DropdownItem>
                         </DropdownMenu>
                       </Dropdown>
+                    ) : (
+                      <Dropdown>
+                        <DropdownTrigger>
+                          <Button isIconOnly size="sm" variant="light">
+                            <MoreVertical size={16} />
+                          </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu aria-label="Comment actions">
+                          <DropdownItem
+                            key="report-comment"
+                            startContent={<Flag size={16} />}
+                            className="text-warning"
+                            onPress={() => openReportModal(comment.comment_id, ReportedType.Comment, comment.author_id)}
+                          >
+                            Report
+                          </DropdownItem>
+                        </DropdownMenu>
+                      </Dropdown>
                     )}
                   </div>
 
@@ -402,6 +621,8 @@ export default function Feed() {
                         onChange={(e) => setEditContent(e.target.value)}
                         placeholder="Edit your comment..."
                         className="w-full"
+                        isInvalid={editContent.trim().length > 0 && editContent.trim().length <= 5}
+                        errorMessage={editContent.trim().length > 0 && editContent.trim().length <= 5 ? "Comment must be more than 5 characters long" : ""}
                       />
                       <div className="flex justify-end gap-2 mt-2">
                         <Button
@@ -420,6 +641,7 @@ export default function Feed() {
                           color="primary"
                           onPress={() => handleUpdateComment(comment.comment_id, postId)}
                           isLoading={isUpdatingComment}
+                          isDisabled={!editContent.trim() || editContent.trim().length <= 5}
                         >
                           Save
                         </Button>
@@ -448,6 +670,9 @@ export default function Feed() {
                         value={commentContent}
                         onChange={(e) => setCommentContent(e.target.value)}
                         placeholder="Write a reply..."
+                        isInvalid={commentContent.trim().length > 0 && commentContent.trim().length <= 5}
+                        errorMessage={commentContent.trim().length > 0 && commentContent.trim().length <= 5 ? "Reply must be more than 5 characters" : ""}
+                        isDisabled={isCommentingOnPost}
                         endContent={
                           <Button
                             isIconOnly
@@ -455,6 +680,7 @@ export default function Feed() {
                             variant="light"
                             onPress={() => handleComment(postId, comment.comment_id)}
                             isLoading={isCommentingOnPost}
+                            isDisabled={!commentContent.trim() || commentContent.trim().length <= 5 || isCommentingOnPost}
                           >
                             <Send size={16} />
                           </Button>
@@ -473,6 +699,28 @@ export default function Feed() {
     );
   };
 
+  // Handle reporting a post or comment
+  const handleReport = () => {
+    if (!reportingItem || !reportReason.trim()) return;
+
+    createReport({
+      reported_user_id: reportingItem.userId,
+      reason: reportReason,
+      reported_type: reportingItem.type,
+      reported_item_id: reportingItem.id
+    });
+
+    setReportReason("");
+    setReportingItem(null);
+    onReportClose();
+  };
+
+  // Open report modal for a post
+  const openReportModal = (id: string, type: ReportedType, userId: string) => {
+    setReportingItem({ id, type, userId });
+    onReportOpen();
+  };
+
   // Render post cards
   const renderPosts = () => {
     if (postsWithAuthors.length === 0) return null;
@@ -482,51 +730,80 @@ export default function Feed() {
       const isLiked = post.likes.some(like => like.user_id === currentUser?.user_id);
       const isExpanded = expandedComments.has(post.post.post_id);
 
+      // Add a function to navigate to user profile
+      const navigateToUserProfile = (username: string) => {
+        navigate(`/users/${username}`);
+      };
+
       return (
         <Card key={post.post.post_id} className="mb-4">
           <CardHeader className="flex gap-3">
-            <Avatar
-              src={post.author?.avatar_url}
-              name={(post.author?.username || "U").charAt(0).toUpperCase()}
-              size="md"
-            />
+            <Button
+              isIconOnly
+              variant="light"
+              className="p-0 min-w-0"
+              onPress={() => post.author?.username && navigateToUserProfile(post.author.username)}
+            >
+              <Avatar
+                src={post.author?.avatar_url}
+                name={(post.author?.username || "U").charAt(0).toUpperCase()}
+                size="md"
+              />
+            </Button>
             <div className="flex flex-col flex-1">
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-md font-semibold">{post.author?.username || "User"}</p>
+                  <Button
+                    variant="light"
+                    className="p-0 h-auto min-w-0 font-semibold text-md"
+                    onPress={() => post.author?.username && navigateToUserProfile(post.author.username)}
+                  >
+                    {post.author?.username || "User"}
+                  </Button>
                   <p className="text-small text-default-500">
                     {formatDate(post.post.created_at)}
                   </p>
                 </div>
-                {isAuthor && (
-                  <Dropdown>
-                    <DropdownTrigger>
-                      <Button isIconOnly size="sm" variant="light">
-                        <MoreVertical size={16} />
-                      </Button>
-                    </DropdownTrigger>
-                    <DropdownMenu aria-label="Post actions">
+                <Dropdown>
+                  <DropdownTrigger>
+                    <Button isIconOnly size="sm" variant="light">
+                      <MoreVertical size={16} />
+                    </Button>
+                  </DropdownTrigger>
+                  <DropdownMenu aria-label="Post actions">
+                    {isAuthor ? (
+                      <>
+                        <DropdownItem
+                          key="edit-post"
+                          startContent={<Edit size={16} />}
+                          onPress={() => {
+                            setEditingPost(post.post.post_id);
+                            setEditContent(post.post.content);
+                          }}
+                        >
+                          Edit
+                        </DropdownItem>
+                        <DropdownItem
+                          key="delete-post"
+                          startContent={<Trash size={16} />}
+                          className="text-danger"
+                          onPress={() => handleDeletePost(post.post.post_id)}
+                        >
+                          Delete
+                        </DropdownItem>
+                      </>
+                    ) : (
                       <DropdownItem
-                        key="edit-post"
-                        startContent={<Edit size={16} />}
-                        onPress={() => {
-                          setEditingPost(post.post.post_id);
-                          setEditContent(post.post.content);
-                        }}
+                        key="report-post"
+                        startContent={<Flag size={16} />}
+                        className="text-warning"
+                        onPress={() => openReportModal(post.post.post_id, ReportedType.Post, post.post.author_id)}
                       >
-                        Edit
+                        Report
                       </DropdownItem>
-                      <DropdownItem
-                        key="delete-post"
-                        startContent={<Trash size={16} />}
-                        className="text-danger"
-                        onPress={() => handleDeletePost(post.post.post_id)}
-                      >
-                        Delete
-                      </DropdownItem>
-                    </DropdownMenu>
-                  </Dropdown>
-                )}
+                    )}
+                  </DropdownMenu>
+                </Dropdown>
               </div>
             </div>
           </CardHeader>
@@ -539,6 +816,8 @@ export default function Feed() {
                   onChange={(e) => setEditContent(e.target.value)}
                   placeholder="Edit your post..."
                   className="w-full"
+                  isInvalid={editContent.trim().length > 0 && editContent.trim().length <= 5}
+                  errorMessage={editContent.trim().length > 0 && editContent.trim().length <= 5 ? "Post content must be more than 5 characters long" : ""}
                 />
                 <div className="flex justify-end gap-2 mt-2">
                   <Button
@@ -557,6 +836,7 @@ export default function Feed() {
                     color="primary"
                     onPress={() => handleUpdatePost(post.post.post_id)}
                     isLoading={isUpdatingPost}
+                    isDisabled={!editContent.trim() || editContent.trim().length <= 5}
                   >
                     Save
                   </Button>
@@ -588,6 +868,7 @@ export default function Feed() {
                   startContent={<ThumbsUp size={16} />}
                   onPress={() => handleLikePost(post.post.post_id)}
                   isLoading={isLikingPost}
+                  isDisabled={isLikingPost}
                 >
                   {post.like_count} {post.like_count === 1 ? "Like" : "Likes"}
                 </Button>
@@ -596,6 +877,7 @@ export default function Feed() {
                   variant="light"
                   startContent={<MessageSquare size={16} />}
                   onPress={() => toggleExpandComments(post.post.post_id)}
+                  isDisabled={isCommentingOnPost}
                 >
                   {post.comments.length} {post.comments.length === 1 ? "Comment" : "Comments"}
                 </Button>
@@ -610,6 +892,9 @@ export default function Feed() {
                     value={replyingTo === null ? commentContent : ""}
                     onChange={(e) => setCommentContent(e.target.value)}
                     placeholder="Write a comment..."
+                    isInvalid={commentContent.trim().length > 0 && commentContent.trim().length <= 5}
+                    errorMessage={commentContent.trim().length > 0 && commentContent.trim().length <= 5 ? "Comment must be more than 5 characters" : ""}
+                    isDisabled={isCommentingOnPost}
                     endContent={
                       <Button
                         isIconOnly
@@ -617,6 +902,7 @@ export default function Feed() {
                         variant="light"
                         onPress={() => handleComment(post.post.post_id)}
                         isLoading={isCommentingOnPost}
+                        isDisabled={!commentContent.trim() || commentContent.trim().length <= 5 || isCommentingOnPost}
                       >
                         <Send size={16} />
                       </Button>
@@ -637,7 +923,30 @@ export default function Feed() {
     });
   };
 
-  if (isLoadingPosts && isLoadingMyGroups) {
+  // Handle page change in pagination mode
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
+
+  // Handle search submission
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchTags(searchInput);
+    setPage(1); // Reset to first page when searching
+    if (usePagination) {
+      refetchPaginatedPosts();
+    } else {
+      refetchPosts();
+    }
+  };
+
+  // Toggle between pagination and infinite scroll
+  const togglePaginationMode = () => {
+    setUsePagination(!usePagination);
+    setPage(1); // Reset to first page when switching modes
+  };
+
+  if (isLoadingPosts && isLoadingMyGroups && isLoadingMyMeetings) {
     return (
       <DefaultLayout>
         <div className="flex justify-center items-center h-[70vh]">
@@ -681,6 +990,8 @@ export default function Feed() {
                       onChange={(e) => setNewPostContent(e.target.value)}
                       minRows={3}
                       className="mb-3"
+                      isInvalid={newPostContent.trim().length > 0 && newPostContent.trim().length <= 5}
+                      errorMessage={newPostContent.trim().length > 0 && newPostContent.trim().length <= 5 ? "Post content must be more than 5 characters long" : ""}
                     />
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Input
@@ -693,7 +1004,7 @@ export default function Feed() {
                         color="primary"
                         type="submit"
                         isLoading={isCreatingPost}
-                        isDisabled={!newPostContent.trim()}
+                        isDisabled={!newPostContent.trim() || newPostContent.trim().length <= 5}
                       >
                         Post
                       </Button>
@@ -702,71 +1013,147 @@ export default function Feed() {
                 </CardBody>
               </Card>
 
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex gap-2 items-center">
-                  <span className="text-default-500">Sort by:</span>
-                  <Button
-                    variant={sortBy === "latest" ? "solid" : "flat"}
-                    color={sortBy === "latest" ? "primary" : "default"}
-                    size="sm"
-                    onPress={() => setSortBy("latest")}
-                  >
-                    Latest
-                  </Button>
-                  <Button
-                    variant={sortBy === "most-liked" ? "solid" : "flat"}
-                    color={sortBy === "most-liked" ? "primary" : "default"}
-                    size="sm"
-                    onPress={() => setSortBy("most-liked")}
-                  >
-                    Most Liked
-                  </Button>
-                </div>
-                <Button
-                  variant="light"
-                  startContent={<RefreshCw size={16} />}
-                  onPress={() => refetchPosts()}
-                  isLoading={isLoadingPosts}
-                  size="sm"
-                >
-                  Refresh
-                </Button>
-              </div>
+              <div className="mb-6">
+                <form onSubmit={handleSearch} className="mb-4">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Search by tags (comma separated)"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      className="flex-1"
+                      startContent={<span className="text-small text-default-400">🔍</span>}
+                      endContent={
+                        <Button
+                          type="submit"
+                          color="primary"
+                          size="sm"
+                          isDisabled={!searchInput.trim()}
+                        >
+                          Search
+                        </Button>
+                      }
+                    />
+                    <Button
+                      variant="flat"
+                      color={searchTags ? "danger" : "default"}
+                      onPress={() => {
+                        setSearchInput("");
+                        setSearchTags("");
+                        setPage(1);
+                        if (usePagination) {
+                          refetchPaginatedPosts();
+                        } else {
+                          refetchPosts();
+                        }
+                      }}
+                      isDisabled={!searchTags}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </form>
 
-              {postsError ? (
-                <Card className="p-6 text-center">
-                  <CardBody className="flex flex-col items-center">
-                    <p className="text-danger">Error loading posts. Please try again.</p>
-                  </CardBody>
-                </Card>
-              ) : (
-                <>
-                  {renderPosts()}
-
-                  {hasNextPage && (
-                    <div className="flex justify-center mt-4 mb-8">
+                <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <span className="text-small text-default-500">Sort by:</span>
                       <Button
-                        variant="flat"
-                        color="primary"
-                        onPress={() => fetchNextPage()}
-                        isLoading={isFetchingNextPage}
+                        variant={sortBy === "latest" ? "solid" : "flat"}
+                        color={sortBy === "latest" ? "primary" : "default"}
+                        size="sm"
+                        onPress={() => setSortBy("latest")}
                       >
-                        Load More
+                        Latest
+                      </Button>
+                      <Button
+                        variant={sortBy === "most-liked" ? "solid" : "flat"}
+                        color={sortBy === "most-liked" ? "primary" : "default"}
+                        size="sm"
+                        onPress={() => setSortBy("most-liked")}
+                      >
+                        Most Liked
                       </Button>
                     </div>
-                  )}
+                    <Button
+                      variant="light"
+                      startContent={<RefreshCw size={16} />}
+                      onPress={() => {
+                        if (usePagination) {
+                          refetchPaginatedPosts();
+                        } else {
+                          refetchPosts();
+                        }
+                      }}
+                      isLoading={isLoadingPosts || isLoadingPaginatedPosts}
+                      size="sm"
+                    >
+                      Refresh
+                    </Button>
+                  </div>
+                  <div>
+                    <Button
+                      variant="flat"
+                      color="secondary"
+                      size="sm"
+                      onPress={togglePaginationMode}
+                    >
+                      {usePagination ? "Use Infinite Scroll" : "Use Pagination"}
+                    </Button>
+                  </div>
+                </div>
 
-                  {postsWithAuthors.length === 0 && !isLoadingPosts && (
-                    <Card className="p-6 text-center">
-                      <CardBody className="flex flex-col items-center">
-                        <MessageSquare size={48} className="text-default-400 mb-4" />
-                        <h3 className="text-xl font-medium mb-2">No posts yet</h3>
-                        <p className="text-default-500 mb-6">Be the first to share something with the community!</p>
-                      </CardBody>
-                    </Card>
-                  )}
-                </>
-              )}
+                {((postsError && !usePagination) || (paginatedPostsError && usePagination)) ? (
+                  <Card className="p-6 text-center">
+                    <CardBody className="flex flex-col items-center">
+                      <p className="text-danger">Error loading posts. Please try again.</p>
+                    </CardBody>
+                  </Card>
+                ) : (
+                  <>
+                    {renderPosts()}
+
+                    {/* Show pagination controls when in pagination mode */}
+                    {usePagination && paginatedPostsResponse && (
+                      <div className="flex justify-center mt-4 mb-8">
+                        <Pagination
+                          total={Math.ceil(paginatedPostsResponse.total_count / paginatedPostsResponse.posts_per_page)}
+                          initialPage={page}
+                          page={page}
+                          onChange={handlePageChange}
+                          showControls
+                          showShadow
+                          color="primary"
+                          size="lg"
+                        />
+                      </div>
+                    )}
+
+                    {/* Show load more button when in infinite scroll mode */}
+                    {!usePagination && hasNextPage && (
+                      <div className="flex justify-center mt-4 mb-8">
+                        <Button
+                          variant="flat"
+                          color="primary"
+                          onPress={() => fetchNextPage()}
+                          isLoading={isFetchingNextPage}
+                        >
+                          Load More
+                        </Button>
+                      </div>
+                    )}
+
+                    {postsWithAuthors.length === 0 && !isLoadingPosts && !isLoadingPaginatedPosts && (
+                      <Card className="p-6 text-center">
+                        <CardBody className="flex flex-col items-center">
+                          <MessageSquare size={48} className="text-default-400 mb-4" />
+                          <h3 className="text-xl font-medium mb-2">No posts yet</h3>
+                          <p className="text-default-500 mb-6">Be the first to share something with the community!</p>
+                        </CardBody>
+                      </Card>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </Tab>
 
@@ -833,43 +1220,137 @@ export default function Feed() {
             </div>
           </Tab>
 
-          <Tab key="upcoming" title={
+          <Tab key="meetings" title={
             <div className="flex items-center gap-2">
-              <Clock size={18} />
-              <span>Upcoming</span>
+              <Video size={18} />
+              <span>My Meetings</span>
             </div>
           }>
-            <div className="mt-6 flex flex-col items-center justify-center py-12">
-              <Calendar size={48} className="text-default-400 mb-4" />
-              <p className="text-xl font-medium mb-2">Coming Soon</p>
-              <p className="text-default-500 mb-6">
-                This feature is under development. Check back later for upcoming events and meetings.
-              </p>
-              <Button color="primary" onPress={handleViewAllGroups}>
-                Browse Support Groups
-              </Button>
-            </div>
-          </Tab>
+            <div className="mt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <Video size={20} />
+                  Your Meetings
+                </h2>
+                <Button
+                  variant="light"
+                  startContent={<RefreshCw size={16} />}
+                  onPress={() => refetchMeetings()}
+                  isLoading={isLoadingMyMeetings}
+                  size="sm"
+                >
+                  Refresh
+                </Button>
+              </div>
 
-          <Tab key="resources" title={
-            <div className="flex items-center gap-2">
-              <BookOpen size={18} />
-              <span>Resources</span>
-            </div>
-          }>
-            <div className="mt-6 flex flex-col items-center justify-center py-12">
-              <BookOpen size={48} className="text-default-400 mb-4" />
-              <p className="text-xl font-medium mb-2">Resources Coming Soon</p>
-              <p className="text-default-500 mb-6">
-                This feature is under development. Check back later for helpful resources.
-              </p>
-              <Button color="primary" onPress={handleViewAllGroups}>
-                Browse Support Groups
-              </Button>
+              {myMeetingsError ? (
+                <Card className="p-6 text-center">
+                  <CardBody className="flex flex-col items-center">
+                    <p className="text-danger">Error loading meetings. Please try again.</p>
+                  </CardBody>
+                </Card>
+              ) : myMeetings.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {myMeetings.map((meeting: Meeting) => (
+                    <Card
+                      key={meeting.meeting_id}
+                      isPressable
+                      onPress={() => handleViewMeeting(meeting.meeting_id)}
+                      className="border border-default-200 hover:border-primary transition-all"
+                    >
+                      <CardHeader className="flex justify-between items-start">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-lg font-semibold">{meeting.title}</p>
+                            <Badge color={getMeetingStatusColor(meeting.status)}>
+                              {getMeetingStatusText(meeting.status)}
+                            </Badge>
+                            {meeting.is_host && (
+                              <Badge color="warning" variant="flat">Host</Badge>
+                            )}
+                          </div>
+                          <p className="text-small text-default-500">
+                            Group: {meeting.group_title}
+                          </p>
+                        </div>
+                      </CardHeader>
+                      <Divider />
+                      <CardBody>
+                        <div className="flex flex-col gap-2">
+                          {meeting.description && (
+                            <p className="text-sm">{meeting.description}</p>
+                          )}
+                          <div className="flex items-center gap-2 text-sm text-default-500">
+                            <Calendar size={16} />
+                            <span>Scheduled time: {new Date(meeting.scheduled_time).toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-default-500">
+                            <UserCheck size={16} />
+                            <span>{meeting.participant_count} participants</span>
+                          </div>
+                        </div>
+                      </CardBody>
+                      <Divider />
+                      <CardFooter>
+                        <Button
+                          color="primary"
+                          variant="flat"
+                          fullWidth
+                          onPress={() => handleViewMeeting(meeting.meeting_id)}
+                        >
+                          {meeting.status === MeetingStatus.Ongoing ? "Join Meeting" : "View Details"}
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card className="p-6 text-center">
+                  <CardBody className="flex flex-col items-center">
+                    <Video size={48} className="text-default-400 mb-4" />
+                    <h3 className="text-xl font-medium mb-2">You have no meetings</h3>
+                    <p className="text-default-500 mb-6">
+                      You haven&apos;t joined any meetings yet. Check your support groups for upcoming meetings.
+                    </p>
+                    <Button color="primary" onPress={handleViewAllGroups}>
+                      Browse Support Groups
+                    </Button>
+                  </CardBody>
+                </Card>
+              )}
             </div>
           </Tab>
         </Tabs>
       </div>
+
+      {/* Report Modal */}
+      <Modal isOpen={isReportOpen} onClose={onReportClose}>
+        <ModalContent>
+          <ModalHeader>Report {reportingItem?.type}</ModalHeader>
+          <ModalBody>
+            <p className="mb-2">Please provide a reason for reporting this {reportingItem?.type.toLowerCase()}:</p>
+            <Textarea
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              placeholder="Enter reason for report..."
+              minRows={3}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="flat" onPress={onReportClose}>
+              Cancel
+            </Button>
+            <Button
+              color="warning"
+              onPress={handleReport}
+              isLoading={isCreatingReport}
+              isDisabled={!reportReason.trim()}
+            >
+              Report
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </DefaultLayout>
   );
 } 

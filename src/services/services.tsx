@@ -1,6 +1,7 @@
 import axios, { AxiosError, AxiosResponse } from "axios";
 import { addToast } from "@heroui/react";
 import { jwtDecode } from "jwt-decode";
+import { ReportedType, ApplicationStatus, SupportGroupStatus } from '../interfaces/enums';
 
 
 // Get the API URL from environment variables or use a default
@@ -48,8 +49,6 @@ const tokenManager = {
         try {
             const decoded = jwtDecode<JwtPayload>(token);
 
-            // Check if the token is expired
-            // Add a 60-second buffer to account for clock differences
             const currentTime = Date.now() / 1000;
             return decoded.exp < currentTime - 60;
         } catch (e) {
@@ -58,7 +57,6 @@ const tokenManager = {
         }
     },
 
-    // Check if token will expire soon (within 5 minutes)
     willExpireSoon: (): boolean => {
         const token = tokenManager.getToken();
         if (!token) return false;
@@ -66,7 +64,6 @@ const tokenManager = {
         try {
             const decoded = jwtDecode<JwtPayload>(token);
 
-            // Check if the token will expire within 5 minutes
             const currentTime = Date.now() / 1000;
             const fiveMinutesFromNow = currentTime + 5 * 60;
 
@@ -103,7 +100,7 @@ const tokenManager = {
 // Create two axios instances - one for public routes and one for protected routes
 const publicApi = axios.create({
     baseURL: API_URL,
-    withCredentials: true, // Always send cookies for public routes too
+    withCredentials: true,
     headers: {
         "Content-Type": "application/json",
     },
@@ -127,6 +124,12 @@ const api = axios.create({
             if (instance === api) {
                 const token = tokenManager.getToken();
 
+
+                if (!token && config.url && !config.url.includes('/api/public/')) {
+                    console.error('Attempted to call protected endpoint without authentication:', config.url);
+                    return Promise.reject(new Error('Authentication required'));
+                }
+
                 // If token exists and will expire soon, try to refresh it
                 if (token && tokenManager.willExpireSoon() && tokenManager.canAttemptRefresh()) {
                     try {
@@ -143,7 +146,10 @@ const api = axios.create({
                         }
                     } catch (refreshError) {
                         console.error('Failed to refresh token:', refreshError);
-                        // Continue with the original token
+                        // If refresh fails and this is a protected route, reject the request
+                        if (config.url && !config.url.includes('/api/public/')) {
+                            return Promise.reject(new Error('Authentication required'));
+                        }
                     }
                 }
 
@@ -201,9 +207,18 @@ const api = axios.create({
                     tokenManager.removeToken();
                     localStorage.removeItem('user');
                 }
+
+                // Don't show toast for authentication errors
+                return Promise.reject(error);
             }
 
-            // Add toast notification for API errors
+            // Check if this is an error from a protected endpoint being called without authentication
+            if (error.message === 'Authentication required') {
+                // Don't show toast for authentication errors
+                return Promise.reject(error);
+            }
+
+            // Add toast notification for non-authentication API errors
             let errorMessage = "An error occurred with the API request";
 
             // Extract error message from response
@@ -392,6 +407,9 @@ export const userService = {
             "/api/protected/users/avatar/upload",
             formData,
             {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
                 timeout: 30000, // 30 seconds timeout for file uploads
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round(
@@ -758,10 +776,16 @@ export const meetingService = {
         return response;
     },
 
-    // POST /api/protected/meetings/{meeting_id}/join
+    // GET /api/protected/meetings/user
+    getUserMeetings: async (): Promise<any> => {
+        const response = await api.get(`/api/protected/meetings/user`);
+        return response;
+    },
+
+    // POST /api/protected/meetings/join
     joinMeeting: async (meetingId: string): Promise<any> => {
         const response = await api.post(
-            `/api/protected/meetings/${meetingId}/join`,
+            `/api/protected/meetings/join`,
             {
                 meeting_id: meetingId,
             }
@@ -942,7 +966,7 @@ export const reportService = {
     createReport: async (reportData: {
         reported_user_id: string;
         reason: string;
-        reported_type: string;
+        reported_type: ReportedType;
         reported_item_id: string;
     }): Promise<any> => {
         const response = await api.post("/api/protected/reports/new", reportData);
@@ -952,117 +976,166 @@ export const reportService = {
 
 // ==================== ADMIN SERVICES ====================
 export const adminService = {
-    // GET /api/admin/sponsor-applications/pending
+    // GET /api/protected/admin/sponsor-applications/pending
     getPendingSponsorApplications: async (): Promise<any> => {
-        const response = await api.get("/api/admin/sponsor-applications/pending");
+        const response = await api.get("/api/protected/admin/sponsor-applications/pending");
         return response;
     },
 
-    // POST /api/admin/sponsor-applications/review
+    // POST /api/protected/admin/sponsor-applications/review
     reviewSponsorApplication: async (
-        applicationId: string,
-        status: string,
-        adminComments?: string
+        params: {
+            applicationId: string,
+            status: ApplicationStatus,
+            adminComments?: string
+        }
     ): Promise<any> => {
-        const response = await api.post("/api/admin/sponsor-applications/review", {
-            application_id: applicationId,
-            status,
-            admin_comments: adminComments,
+        const response = await api.post("/api/protected/admin/sponsor-applications/review", {
+            application_id: params.applicationId,
+            status: params.status,
+            admin_comments: params.adminComments,
         });
         return response;
     },
 
-    // GET /api/admin/support-groups/pending
+    // GET /api/protected/admin/support-groups/pending
     getPendingSupportGroups: async (): Promise<any> => {
-        const response = await api.get("/api/admin/support-groups/pending");
+        const response = await api.get("/api/protected/admin/support-groups/pending");
         return response;
     },
 
-    // POST /api/admin/support-groups/review
+    // POST /api/protected/admin/support-groups/review
     reviewSupportGroup: async (
-        supportGroupId: string,
-        status: string,
-        adminComments?: string
+        params: {
+            supportGroupId: string,
+            status: SupportGroupStatus,
+            adminComments?: string
+        }
     ): Promise<any> => {
-        const response = await api.post("/api/admin/support-groups/review", {
-            support_group_id: supportGroupId,
-            status,
-            admin_comments: adminComments,
+        const response = await api.post("/api/protected/admin/support-groups/review", {
+            support_group_id: params.supportGroupId,
+            status: params.status,
+            admin_comments: params.adminComments,
         });
         return response;
     },
 
-    // GET /api/admin/resources/pending
+    // GET /api/protected/admin/resources/pending
     getPendingResources: async (): Promise<any> => {
-        const response = await api.get("/api/admin/resources/pending");
+        const response = await api.get("/api/protected/admin/resources/pending");
         return response;
     },
 
-    // POST /api/admin/resources/review
+    // POST /api/protected/admin/resources/review
     reviewResource: async (
-        resourceId: string,
-        approved: boolean,
-        adminComments?: string
+        params: {
+            resourceId: string,
+            approved: boolean,
+            adminComments?: string
+        }
     ): Promise<any> => {
-        const response = await api.post("/api/admin/resources/review", {
-            resource_id: resourceId,
-            approved,
-            admin_comments: adminComments,
+        const response = await api.post("/api/protected/admin/resources/review", {
+            resource_id: params.resourceId,
+            approved: params.approved,
+            admin_comments: params.adminComments,
         });
         return response;
     },
 
-    // GET /api/admin/reports/unresolved
+    // GET /api/protected/admin/reports/unresolved
     getUnresolvedReports: async (): Promise<any> => {
-        const response = await api.get("/api/admin/reports/unresolved");
+        const response = await api.get("/api/protected/admin/reports/unresolved");
         return response;
     },
 
-    // POST /api/admin/reports/handle
+    // POST /api/protected/admin/reports/handle
     handleReport: async (
-        reportId: string,
-        actionTaken: string,
-        resolved: boolean
+        params: {
+            reportId: string,
+            actionTaken: string,
+            resolved: boolean
+        }
     ): Promise<any> => {
-        const response = await api.post("/api/admin/reports/handle", {
-            report_id: reportId,
-            action_taken: actionTaken,
-            resolved,
+        const response = await api.post("/api/protected/admin/reports/handle", {
+            report_id: params.reportId,
+            action_taken: params.actionTaken,
+            resolved: params.resolved,
         });
         return response;
     },
 
-    // POST /api/admin/users/ban
+    // POST /api/protected/admin/users/ban
     banUser: async (
-        userId: string,
-        reason: string,
-        banDurationDays?: number
+        params: {
+            userId: string,
+            reason: string,
+            banDurationDays?: number
+        }
     ): Promise<any> => {
-        const response = await api.post("/api/admin/users/ban", {
-            user_id: userId,
-            reason,
-            ban_duration_days: banDurationDays,
+        const response = await api.post("/api/protected/admin/users/ban", {
+            user_id: params.userId,
+            reason: params.reason,
+            ban_duration_days: params.banDurationDays,
         });
         return response;
     },
 
-    // POST /api/admin/users/unban
+    // POST /api/protected/admin/users/unban
     unbanUser: async (userId: string): Promise<any> => {
-        const response = await api.post("/api/admin/users/unban", {
+        const response = await api.post("/api/protected/admin/users/unban", {
             user_id: userId,
         });
         return response;
     },
 
-    // GET /api/admin/users/banned
+    // GET /api/protected/admin/users/banned
     getBannedUsers: async (): Promise<any> => {
-        const response = await api.get("/api/admin/users/banned");
+        const response = await api.get("/api/protected/admin/users/banned");
         return response;
     },
 
-    // GET /api/admin/stats
+    // GET /api/protected/admin/users
+    getAllUsers: async (params?: {
+        username?: string,
+        role?: string,
+        limit?: number,
+        offset?: number
+    }): Promise<any> => {
+        let url = "/api/protected/admin/users";
+
+        // Add query parameters if provided
+        if (params) {
+            const queryParams = new URLSearchParams();
+
+            if (params.username) {
+                queryParams.append("username", params.username);
+            }
+
+            if (params.role) {
+                queryParams.append("role", params.role);
+            }
+
+            if (params.limit) {
+                queryParams.append("limit", params.limit.toString());
+            }
+
+            if (params.offset) {
+                queryParams.append("offset", params.offset.toString());
+            }
+
+            const queryString = queryParams.toString();
+            if (queryString) {
+                url += `?${queryString}`;
+            }
+        }
+
+        const response = await api.get(url);
+        return response;
+    },
+
+    // GET /api/protected/admin/stats
     getAdminStats: async (): Promise<any> => {
-        const response = await api.get("/api/admin/stats");
+        const response = await api.get("/api/protected/admin/stats");
         return response;
     },
 };

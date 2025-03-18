@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { AxiosError } from "axios";
 import {
   Card,
   CardHeader,
@@ -31,11 +32,14 @@ import {
 import DefaultLayout from "../layouts/default";
 import { useSponsor } from "../hooks/useSponsor";
 import { useUser } from "../hooks/useUser";
+import { useNavigate } from "react-router-dom";
+import { ApplicationStatus } from "../interfaces/enums";
 
 export default function SponsorApplication() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [applicationInfo, setApplicationInfo] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const navigate = useNavigate();
 
   // Get user hooks
   const { currentUser } = useUser();
@@ -55,12 +59,29 @@ export default function SponsorApplication() {
   const {
     data: applicationResponse,
     isLoading: isLoadingApplication,
-    error: applicationError,
+    error: _applicationError,
     refetch: refetchApplication,
-  } = useQuery(getSponsorApplicationStatus());
+  } = useQuery({
+    ...getSponsorApplicationStatus(),
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnReconnect: false,
+    retry: (failureCount, error) => {
+      const axiosError = error as AxiosError;
+      if (axiosError.response?.status === 404) {
+        return false;
+      }
+      // Only retry once for other errors
+      return failureCount < 1;
+    },
+    // Cache the result for 10 minutes
+    staleTime: 10 * 60 * 1000,
+    // Don't refetch automatically
+    refetchInterval: false
+  });
 
   // Extract application data
-  const application = applicationResponse?.data;
+  const application = applicationResponse;
 
   // Set initial application info when data is loaded
   useEffect(() => {
@@ -69,29 +90,55 @@ export default function SponsorApplication() {
     }
   }, [application]);
 
+  // Check if profile is complete
+  const isProfileComplete = () => {
+    if (!currentUser) return false;
+
+    // Check if any of the required fields are null or empty arrays
+    const hasLocation = currentUser.location !== null;
+    const hasInterests = Array.isArray(currentUser.interests) && currentUser.interests.length > 0;
+    const hasExperience = Array.isArray(currentUser.experience) && currentUser.experience.length > 0;
+    const hasAvailableDays = Array.isArray(currentUser.available_days) && currentUser.available_days.length > 0;
+    const hasLanguages = Array.isArray(currentUser.languages) && currentUser.languages.length > 0;
+
+    return hasLocation && hasInterests && hasExperience && hasAvailableDays && hasLanguages;
+  };
+
   // Handle applying for sponsor
   const handleApply = async () => {
     if (!applicationInfo.trim()) return;
 
-    await applyForSponsor(applicationInfo);
-    refetchApplication();
-    onClose();
+    try {
+      await applyForSponsor(applicationInfo);
+      refetchApplication();
+      onClose();
+    } catch (error) {
+      console.error("Error applying for sponsor:", error);
+    }
   };
 
   // Handle updating application
   const handleUpdate = async () => {
     if (!applicationInfo.trim()) return;
 
-    await updateSponsorApplication(applicationInfo);
-    refetchApplication();
-    onClose();
+    try {
+      await updateSponsorApplication(applicationInfo);
+      // The query will be automatically invalidated by the mutation
+      onClose();
+    } catch (error) {
+      console.error("Error updating application:", error);
+    }
   };
 
   // Handle deleting application
   const handleDelete = async () => {
-    await deleteSponsorApplication();
-    refetchApplication();
-    setIsConfirmingDelete(false);
+    try {
+      await deleteSponsorApplication();
+      // The query will be automatically invalidated by the mutation
+      setIsConfirmingDelete(false);
+    } catch (error) {
+      console.error("Error deleting application:", error);
+    }
   };
 
   // Format date for display
@@ -101,13 +148,13 @@ export default function SponsorApplication() {
   };
 
   // Get status chip color based on application status
-  const getStatusChipColor = (status: string) => {
+  const getStatusChipColor = (status: ApplicationStatus) => {
     switch (status) {
-      case "Pending":
+      case ApplicationStatus.Pending:
         return "warning";
-      case "Approved":
+      case ApplicationStatus.Approved:
         return "success";
-      case "Rejected":
+      case ApplicationStatus.Rejected:
         return "danger";
       default:
         return "default";
@@ -115,13 +162,13 @@ export default function SponsorApplication() {
   };
 
   // Get status icon based on application status
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: ApplicationStatus) => {
     switch (status) {
-      case "Pending":
+      case ApplicationStatus.Pending:
         return <Clock className="w-5 h-5" />;
-      case "Approved":
+      case ApplicationStatus.Approved:
         return <CheckCircle className="w-5 h-5" />;
-      case "Rejected":
+      case ApplicationStatus.Rejected:
         return <XCircle className="w-5 h-5" />;
       default:
         return null;
@@ -167,7 +214,7 @@ export default function SponsorApplication() {
             <Button
               color="primary"
               as="a"
-              href="/sponsor-dashboard"
+              href="/sponsor"
             >
               Go to Sponsor Dashboard
             </Button>
@@ -211,7 +258,48 @@ export default function SponsorApplication() {
       );
     }
 
-    // If no application exists
+    // If profile is incomplete, show a message
+    if (!isProfileComplete()) {
+      return (
+        <Card className="max-w-3xl mx-auto">
+          <CardHeader className="flex gap-3">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="text-warning w-6 h-6" />
+                <p className="text-xl font-semibold">Complete Your Profile First</p>
+              </div>
+              <p className="text-small text-default-500">
+                You need to complete your profile before you can apply to become a sponsor.
+              </p>
+            </div>
+          </CardHeader>
+          <Divider />
+          <CardBody>
+            <p className="mb-4">
+              To become a sponsor, we need more information about you. Please complete your profile with the following information:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              {!currentUser?.location && <li>Your location</li>}
+              {(!currentUser?.interests || !Array.isArray(currentUser.interests) || currentUser.interests.length === 0) && <li>Your interests</li>}
+              {(!currentUser?.experience || !Array.isArray(currentUser.experience) || currentUser.experience.length === 0) && <li>Your experience level</li>}
+              {(!currentUser?.available_days || !Array.isArray(currentUser.available_days) || currentUser.available_days.length === 0) && <li>Your availability</li>}
+              {(!currentUser?.languages || !Array.isArray(currentUser.languages) || currentUser.languages.length === 0) && <li>Languages you speak</li>}
+            </ul>
+          </CardBody>
+          <Divider />
+          <CardFooter>
+            <Button
+              color="primary"
+              onPress={() => navigate("/profile")}
+            >
+              Complete My Profile
+            </Button>
+          </CardFooter>
+        </Card>
+      );
+    }
+
+    // If no application exists or application is null
     if (!application) {
       return (
         <Card className="max-w-3xl mx-auto">
@@ -234,7 +322,7 @@ export default function SponsorApplication() {
 
               <h3 className="text-lg font-semibold">Requirements:</h3>
               <ul className="list-disc pl-5 space-y-1">
-                <li>At least 6 months of active membership</li>
+                <li>At least 2 months of active membership</li>
                 <li>Regular participation in group activities</li>
                 <li>Willingness to support and guide others</li>
                 <li>Good standing in the community</li>
@@ -303,7 +391,7 @@ export default function SponsorApplication() {
               </div>
             )}
 
-            {application.status === "Rejected" && (
+            {application.status === ApplicationStatus.Rejected && (
               <div className="flex items-start gap-2 p-3 bg-danger-50 text-danger-600 rounded-md">
                 <AlertTriangle className="w-5 h-5 mt-0.5" />
                 <div>
@@ -313,7 +401,7 @@ export default function SponsorApplication() {
               </div>
             )}
 
-            {application.status === "Pending" && (
+            {application.status === ApplicationStatus.Pending && (
               <div className="flex items-start gap-2 p-3 bg-warning-50 text-warning-600 rounded-md">
                 <Clock className="w-5 h-5 mt-0.5" />
                 <div>
@@ -323,7 +411,7 @@ export default function SponsorApplication() {
               </div>
             )}
 
-            {application.status === "Approved" && (
+            {application.status === ApplicationStatus.Approved && (
               <div className="flex items-start gap-2 p-3 bg-success-50 text-success-600 rounded-md">
                 <CheckCircle className="w-5 h-5 mt-0.5" />
                 <div>
@@ -336,7 +424,7 @@ export default function SponsorApplication() {
         </CardBody>
         <Divider />
         <CardFooter className="flex justify-between">
-          {application.status === "Pending" && (
+          {application.status === ApplicationStatus.Pending && (
             <>
               <div>
                 <Button
@@ -360,7 +448,7 @@ export default function SponsorApplication() {
             </>
           )}
 
-          {application.status === "Rejected" && (
+          {application.status === ApplicationStatus.Rejected && (
             <Button
               color="primary"
               onPress={onOpen}

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { matchingService, ApiResponse } from '../services/services';
+import { matchingService } from '../services/services';
 
 export function useMatching() {
     const queryClient = useQueryClient();
@@ -19,7 +19,7 @@ export function useMatching() {
             const response = await matchingService.getRecommendedSponsors();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response: any) => response.data,
         staleTime: 10 * 60 * 1000, // 10 minutes
     });
 
@@ -33,7 +33,7 @@ export function useMatching() {
             const response = await matchingService.getMatchingStatus();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response:any) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 

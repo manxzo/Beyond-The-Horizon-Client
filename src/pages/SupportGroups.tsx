@@ -50,18 +50,18 @@ export default function SupportGroups() {
         data: allGroupsResponse,
         isLoading: isLoadingAllGroups,
         error: allGroupsError,
-       
+
     } = useQuery(getSupportGroups());
     // Fetch my support groups
     const {
         data: myGroupsResponse,
         isLoading: isLoadingMyGroups,
         error: myGroupsError,
-       
+
     } = useQuery(getMyGroups());
     // Extract the actual data from the responses
     const allGroups = allGroupsResponse || [];
-    const myGroups = myGroupsResponse|| [];
+    const myGroups = myGroupsResponse || [];
     // Handle joining a support group
     const handleJoinGroup = (groupId: string) => {
         joinSupportGroup(groupId);

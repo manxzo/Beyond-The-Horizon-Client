@@ -2,12 +2,121 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { tokenManager, wsService } from '../services/services';
 import { addToast } from "@heroui/react";
 
+/**
+ * Enum representing user roles in the system.
+ * Must match the roles defined on the server.
+ */
+export enum UserRole {
+    USER = "user",
+    SPONSOR = "sponsor",
+    ADMIN = "admin",
+    MODERATOR = "moderator"
+}
+
+/**
+ * Common message types used in the application
+ */
+export enum MessageType {
+    // Authentication messages
+    AUTHENTICATION_SUCCESS = "authentication_success",
+    AUTHENTICATION_ERROR = "error",
+
+    // Standard message types
+    CHAT_MESSAGE = "chat_message",
+    PRIVATE_MESSAGE = "private_message",
+    GROUP_MESSAGE = "group_message",
+    NOTIFICATION = "notification",
+    NEW_MESSAGE = "new_message",
+    SPONSOR_NOTIFICATION = "sponsor_notification",
+    GLOBAL_ANNOUNCEMENT = "global_announcement",
+    USER_STATUS_CHANGE = "user_status_change",
+    MEETING_UPDATE = "meeting_update",
+    SUPPORT_GROUP_UPDATE = "support_group_update",
+    SPONSOR_APPLICATION_UPDATE = "sponsor_application_update"
+}
+
+/**
+ * Interface for WebSocket message payloads
+ */
+export interface WebSocketPayload {
+    type: string;
+    [key: string]: any;
+}
+
+/**
+ * WebSocketContext provides WebSocket functionality throughout the application.
+ * 
+ * Usage examples:
+ * 
+ * // Basic message sending through WebSocket
+ * const { sendMessage } = useWebSocket();
+ * sendMessage(MessageType.CHAT_MESSAGE, { content: 'Hello world!' });
+ * 
+ * // Server-side WebSocket broadcasting (uses HTTP endpoints)
+ * const { sendToUser, sendToUsers } = useWebSocket();
+ * sendToUser('user-123', { type: MessageType.PRIVATE_MESSAGE, content: 'Hello user!' });
+ * sendToUsers(['user-123', 'user-456'], { type: MessageType.GROUP_MESSAGE, content: 'Hello group!' });
+ * 
+ * // More server-side broadcasting options
+ * const { sendToRole, sendToAll } = useWebSocket();
+ * sendToRole(UserRole.SPONSOR, { type: MessageType.SPONSOR_NOTIFICATION, content: 'New sponsee available!' });
+ * sendToAll({ type: MessageType.GLOBAL_ANNOUNCEMENT, content: 'System maintenance in 1 hour' });
+ * 
+ * // Listening for messages
+ * const { addMessageListener } = useWebSocket();
+ * useEffect(() => {
+ *   const removeListener = addMessageListener(MessageType.CHAT_MESSAGE, (payload) => {
+ *     console.log('New chat message:', payload);
+ *   });
+ *   
+ *   // Clean up listener when component unmounts
+ *   return removeListener;
+ * }, []);
+ */
+
 // Define the shape of our WebSocket context
 interface WebSocketContextType {
     isConnected: boolean;
-    sendMessage: (type: string, payload: any) => void;
-    addMessageListener: (type: string, callback: (payload: any) => void) => () => void;
+    sendMessage: (type: MessageType | string, payload: any) => void;
+    addMessageListener: (type: MessageType | string, callback: (payload: any) => void) => () => void;
     lastError: string | null;
+    // Add HTTP-based WebSocket broadcast methods
+    /**
+     * Send a message to a specific user via server HTTP endpoint
+     * @param userId - The ID of the user to send the message to
+     * @param payload - The payload object containing type and data to send
+     * @returns Promise that resolves when the server has processed the request
+     */
+    sendToUser: (userId: string, payload: WebSocketPayload) => Promise<any>;
+
+    /**
+     * Send a message to multiple users via server HTTP endpoint
+     * @param userIds - Array of user IDs to send the message to
+     * @param payload - The payload object containing type and data to send
+     * @returns Promise that resolves when the server has processed the request
+     */
+    sendToUsers: (userIds: string[], payload: WebSocketPayload) => Promise<any>;
+
+    /**
+     * Send a message to all users with a specific role via server HTTP endpoint
+     * @param role - The role to target from UserRole enum
+     * @param payload - The payload object containing type and data to send
+     * @returns Promise that resolves when the server has processed the request
+     */
+    sendToRole: (role: UserRole, payload: WebSocketPayload) => Promise<any>;
+
+    /**
+     * Send a message to all connected users via server HTTP endpoint
+     * @param payload - The payload object containing type and data to send
+     * @returns Promise that resolves when the server has processed the request
+     */
+    sendToAll: (payload: WebSocketPayload) => Promise<any>;
+
+    /**
+     * Explicitly disconnect the WebSocket connection
+     * Used when logging out to ensure clean disconnection
+     */
+    disconnectWebSocket: () => void;
 }
 
 // Create the context with a default value
@@ -16,6 +125,12 @@ const WebSocketContext = createContext<WebSocketContextType>({
     sendMessage: () => { },
     addMessageListener: () => () => { },
     lastError: null,
+    // Add default implementations for new methods
+    sendToUser: () => Promise.resolve(),
+    sendToUsers: () => Promise.resolve(),
+    sendToRole: () => Promise.resolve(),
+    sendToAll: () => Promise.resolve(),
+    disconnectWebSocket: () => { },
 });
 
 // Custom hook to use the WebSocket context
@@ -108,15 +223,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
             wsRef.current.onmessage = (event) => {
                 try {
+                    console.log('WebSocket message received:', event.data);
                     const data = JSON.parse(event.data);
                     const { type, payload } = data;
 
                     console.log(`Received WebSocket message of type: ${type}`);
 
                     // Handle authentication messages
-                    if (type === 'authentication_success') {
+                    if (type === MessageType.AUTHENTICATION_SUCCESS) {
                         console.log('WebSocket authentication successful');
-                    } else if (type === 'error' && payload?.message?.includes('Not authenticated')) {
+                    } else if (type === MessageType.AUTHENTICATION_ERROR && payload?.message?.includes('Not authenticated')) {
                         console.error('WebSocket authentication failed');
                         // Only try to refresh if the token has actually expired
                         if (tokenManager.isTokenExpired() && tokenManager.canAttemptRefresh()) {
@@ -129,21 +245,21 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
                     }
 
                     // Show toast notifications for certain message types
-                    if (type === 'notification') {
+                    if (type === MessageType.NOTIFICATION) {
                         addToast({
                             title: payload.title || 'New Notification',
                             description: payload.message || 'You have a new notification',
                             color: payload.color || "primary",
                             size: "lg"
                         });
-                    } else if (type === 'new_message') {
+                    } else if (type === MessageType.NEW_MESSAGE) {
                         addToast({
                             title: 'New Message',
                             description: `New message from ${payload.sender_username || 'someone'}`,
                             color: "primary",
                             size: "lg"
                         });
-                    } else if (type === 'sponsor_application_update') {
+                    } else if (type === MessageType.SPONSOR_APPLICATION_UPDATE) {
                         addToast({
                             title: 'Sponsor Application Update',
                             description: payload.message || 'Your sponsor application status has been updated',
@@ -176,7 +292,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     }, []);
 
     // Function to send a message through the WebSocket
-    const sendMessage = useCallback((type: string, payload: any) => {
+    const sendMessage = useCallback((type: MessageType | string, payload: any) => {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
             const message = JSON.stringify({ type, payload });
             wsRef.current.send(message);
@@ -196,7 +312,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     }, [connectWebSocket]);
 
     // Function to add a message listener
-    const addMessageListener = useCallback((type: string, callback: (payload: any) => void) => {
+    const addMessageListener = useCallback((type: MessageType | string, callback: (payload: any) => void) => {
         // Get or create the set of listeners for this message type
         if (!messageListenersRef.current.has(type)) {
             messageListenersRef.current.set(type, new Set());
@@ -276,6 +392,49 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         sendMessage,
         addMessageListener,
         lastError,
+        // Implement the HTTP-based WebSocket broadcast methods
+        sendToUser: async (userId: string, payload: WebSocketPayload) => {
+            try {
+                return await wsService.sendToUser(userId, payload);
+            } catch (error) {
+                console.error('Error sending message to user:', error);
+                setLastError(`Failed to send message to user: ${error}`);
+                throw error;
+            }
+        },
+        sendToUsers: async (userIds: string[], payload: WebSocketPayload) => {
+            try {
+                return await wsService.sendToUsers(userIds, payload);
+            } catch (error) {
+                console.error('Error sending message to users:', error);
+                setLastError(`Failed to send message to users: ${error}`);
+                throw error;
+            }
+        },
+        sendToRole: async (role: UserRole, payload: WebSocketPayload) => {
+            try {
+                return await wsService.sendToRole(role, payload);
+            } catch (error) {
+                console.error('Error sending message to role:', error);
+                setLastError(`Failed to send message to role: ${error}`);
+                throw error;
+            }
+        },
+        sendToAll: async (payload: WebSocketPayload) => {
+            try {
+                return await wsService.sendToAll(payload);
+            } catch (error) {
+                console.error('Error sending message to all users:', error);
+                setLastError(`Failed to send message to all users: ${error}`);
+                throw error;
+            }
+        },
+        disconnectWebSocket: () => {
+            if (wsRef.current) {
+                intentionalCloseRef.current = true;
+                wsRef.current.close();
+            }
+        },
     };
 
     return (

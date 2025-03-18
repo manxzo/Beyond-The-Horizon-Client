@@ -2,12 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { authService, userService, userSignupData, tokenManager } from '../services/services';
 import { useState, useEffect } from 'react';
+import { useWebSocket } from '../contexts/WebSocketContext';
 
 export function useUser() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const [storedUser, setStoredUser] = useState<any>(null);
     const [isInitialized, setIsInitialized] = useState(false);
+    const { disconnectWebSocket } = useWebSocket();
 
     const QUERY_KEYS = {
         currentUser: ['currentUser'],
@@ -53,6 +55,9 @@ export function useUser() {
         queryFn: async () => {
             // Get the full response and return its data property
             const response = await userService.getCurrentUser();
+            localStorage.removeItem('user');
+            localStorage.setItem('user', JSON.stringify(response.data));
+            setStoredUser(response.data);
             return response.data;
         },
         enabled: !!authStatus && isInitialized,
@@ -101,7 +106,7 @@ export function useUser() {
         } else {
             setIsInitialized(true);
         }
-        if(!token && user) {
+        if (!token && user) {
             localStorage.removeItem('user');
             tokenManager.removeToken();
             setStoredUser(null);
@@ -174,6 +179,10 @@ export function useUser() {
             // Refresh auth status
             recheckAuth();
 
+            // Invalidate message-related queries to ensure unread counts are fetched
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            queryClient.invalidateQueries({ queryKey: ['groupChats'] });
+
             // Redirect to home page after successful login
             navigate('/');
         },
@@ -207,14 +216,30 @@ export function useUser() {
             return response.data;
         },
         onSuccess: () => {
-            localStorage.removeItem('user');
+            // Disconnect WebSocket connection
+            disconnectWebSocket();
+
+            // Clear all local storage items
+            localStorage.clear(); // Clear all localStorage items instead of just specific ones
+            sessionStorage.clear(); // Clear all sessionStorage items as well
             tokenManager.removeToken();
             setStoredUser(null);
 
+            // Clear all query cache data
+            queryClient.clear();
+
+            // Set specific query data to null for immediate UI updates
             queryClient.setQueryData(QUERY_KEYS.currentUser, null);
             queryClient.setQueryData(QUERY_KEYS.authStatus, false);
 
-            navigate('/login');
+            // Redirect to login page and force a complete page reload
+            navigate('/login', { replace: true });
+
+            // Force a complete page reload to ensure a fresh state
+            // This will happen after the navigation
+            setTimeout(() => {
+                window.location.reload();
+            }, 100);
         },
     });
 
@@ -236,8 +261,26 @@ export function useUser() {
             const response = await userService.updateProfile(profileData);
             return response.data;
         },
-        onSuccess: () => {
+        onSuccess: (_data) => {
+            // Invalidate the current user query to trigger a refetch
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
+
+            // After invalidating, we need to refetch the user data
+            refetchUser().then(result => {
+                if (result.data) {
+                    // Update localStorage with the latest user data
+                    const updatedUser = result.data;
+                    // Preserve the token when updating localStorage
+                    const token = tokenManager.getToken();
+                    const completeUserData = {
+                        ...updatedUser,
+                        token
+                    };
+
+                    localStorage.setItem('user', JSON.stringify(completeUserData));
+                    setStoredUser(completeUserData);
+                }
+            });
         },
     });
 
@@ -252,6 +295,23 @@ export function useUser() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
+
+            // After invalidating, refetch and update localStorage
+            refetchUser().then(result => {
+                if (result.data) {
+                    // Update localStorage with the latest user data
+                    const updatedUser = result.data;
+                    // Preserve the token when updating localStorage
+                    const token = tokenManager.getToken();
+                    const completeUserData = {
+                        ...updatedUser,
+                        token
+                    };
+
+                    localStorage.setItem('user', JSON.stringify(completeUserData));
+                    setStoredUser(completeUserData);
+                }
+            });
         },
     });
 
@@ -266,6 +326,23 @@ export function useUser() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
+
+            // After invalidating, refetch and update localStorage
+            refetchUser().then(result => {
+                if (result.data) {
+                    // Update localStorage with the latest user data
+                    const updatedUser = result.data;
+                    // Preserve the token when updating localStorage
+                    const token = tokenManager.getToken();
+                    const completeUserData = {
+                        ...updatedUser,
+                        token
+                    };
+
+                    localStorage.setItem('user', JSON.stringify(completeUserData));
+                    setStoredUser(completeUserData);
+                }
+            });
         },
     });
 

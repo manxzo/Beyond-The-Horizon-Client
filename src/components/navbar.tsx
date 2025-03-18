@@ -17,83 +17,38 @@ import {
 import {
   MessageSquare,
   Heart,
-  ChevronDown,
   Shield,
   LogOut,
   Settings,
   User as UserIcon,
-  HelpCircle
+  HelpCircle,
+  Award,
+  FileText,
+  Users,
+  Home
 } from "lucide-react";
 
-import { siteConfig, NavItem } from "@/config/site";
+import { siteConfig } from "@/config/site";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { Logo } from "@/components/icons";
 import { useUser } from "@/hooks/useUser";
-import { useState, useEffect } from "react";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
-// Helper component for dropdown navigation
-const NavDropdown = ({
-  label,
-  items,
-  icon
-}: {
-  label: string;
-  items: NavItem[];
-  icon?: React.ReactNode;
-}) => {
-  return (
-    <Dropdown>
-      <NavbarItem>
-        <DropdownTrigger>
-          <Button
-            disableRipple
-            className="p-0 bg-transparent data-[hover=true]:bg-transparent"
-            endContent={<ChevronDown className="w-4 h-4" />}
-            radius="sm"
-            variant="light"
-          >
-            {icon && <span className="mr-1">{icon}</span>}
-            {label}
-          </Button>
-        </DropdownTrigger>
-      </NavbarItem>
-      <DropdownMenu aria-label={`${label} navigation`}>
-        {items.map((item) => (
-          <DropdownItem key={item.href} textValue={item.label}>
-            <Link
-              className="w-full"
-              color="foreground"
-              href={item.href}
-              title={item.description}
-            >
-              {item.label}
-            </Link>
-          </DropdownItem>
-        ))}
-      </DropdownMenu>
-    </Dropdown>
-  );
-};
 
 export const Navbar = () => {
   const { currentUser, isAuthenticated, logout } = useUser();
-  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  // Get unread message counts
+  const { totalUnreadCount, isLoading: isLoadingUnreadCounts } = useUnreadMessages();
 
   // Check user roles - add null checks with optional chaining
   const isAdmin = currentUser?.role === "Admin";
   const isSponsor = currentUser?.role === "Sponsor";
 
-  // Effect to simulate unread message count (replace with actual implementation)
-  useEffect(() => {
-    // In a real implementation, this would come from a WebSocket or API call
-    // For example, using the useWebSocketListener hook from the README
-    if (isAuthenticated) {
-      // Simulate some unread messages for demonstration
-      setUnreadMessages(3);
-    } else {
-      setUnreadMessages(0);
-    }
-  }, [isAuthenticated]);
+  // Group member navigation items by category
+  const mainNavItems = siteConfig.navItems.member.filter(item =>
+    ["Feed", "Support Groups", "Resources"].includes(item.label)
+  );
 
   return (
     <HeroUINavbar
@@ -114,70 +69,100 @@ export const Navbar = () => {
         </NavbarBrand>
 
         {/* Public navigation items - only shown when not authenticated */}
-        {!isAuthenticated && siteConfig.navItems.public.map((item) => (
-          item.label === "Register" || item.label === "Login" ? null :
-          <NavbarItem key={item.href}>
-            <Link
-              color="foreground"
-              href={item.href}
-              title={item.description}
-            >
-              {item.label}
-            </Link>
-          </NavbarItem>
-        ))}
-
-        {/* Member-specific navigation items - shown when authenticated */}
-        {isAuthenticated && siteConfig.navItems.member
-          .filter(item => !['Messages', 'Group Chats'].includes(item.label))
-          .map((item) => (
-            <NavbarItem key={item.href}>
+        {!isAuthenticated ? (
+          <>
+            <NavbarItem>
               <Link
                 color="foreground"
-                href={item.href}
-                title={item.description}
+                href="/"
+                title="Return to the homepage"
               >
-                {item.label}
+                <Home className="w-4 h-4 mr-1" />
+                Home
               </Link>
             </NavbarItem>
-          ))}
+            <NavbarItem>
+              <Link
+                color="foreground"
+                href="/about"
+                title="Learn about our mission and values"
+              >
+                About
+              </Link>
+            </NavbarItem>
+          </>
+        ) : null}
 
+        {/* Main navigation items for authenticated users */}
+        {isAuthenticated ? (
+          <>
+            {mainNavItems.map((item) => (
+              <NavbarItem key={item.href}>
+                <Link
+                  color="foreground"
+                  href={item.href}
+                  title={item.description}
+                  className="flex items-center gap-1"
+                >
+                  {item.label === "Feed" && <Home className="w-4 h-4" />}
+                  {item.label === "Support Groups" && <Users className="w-4 h-4" />}
+                  {item.label === "Resources" && <FileText className="w-4 h-4" />}
+                  {item.label}
+                </Link>
+              </NavbarItem>
+            ))}
+          </>
+        ) : null}
+
+        {/* Admin Dashboard link */}
+        {isAdmin ? (
+          <NavbarItem>
+            <Link
+              color="foreground"
+              href="/admin"
+              title="Admin Dashboard"
+              className="flex items-center gap-1"
+            >
+              <Shield className="w-4 h-4" />
+              Admin
+            </Link>
+          </NavbarItem>
+        ) : null}
+
+        {/* Sponsor Dashboard link */}
+        {isSponsor && !isAdmin ? (
+          <NavbarItem>
+            <Link
+              color="foreground"
+              href="/sponsor"
+              title="Sponsor Dashboard"
+              className="flex items-center gap-1"
+            >
+              <Heart className="w-4 h-4" />
+              Sponsor
+            </Link>
+          </NavbarItem>
+        ) : null}
+      </NavbarContent>
+
+      <NavbarContent justify="end">
         {/* Messages icon with badge for unread messages */}
-        {isAuthenticated && (
+        {isAuthenticated ? (
           <NavbarItem>
             <Badge
-              content={unreadMessages > 0 ? unreadMessages : null}
+              content={totalUnreadCount > 0 ? totalUnreadCount : null}
               color="danger"
               shape="circle"
               placement="top-right"
+              isInvisible={isLoadingUnreadCounts}
             >
               <Link href="/messages" title="Messages and Group Chats">
                 <MessageSquare className="w-5 h-5 text-default-500" />
               </Link>
             </Badge>
           </NavbarItem>
-        )}
+        ) : null}
 
-        {/* Admin-specific navigation dropdown */}
-        {isAdmin && (
-          <NavDropdown
-            label="Admin"
-            items={siteConfig.navItems.admin}
-            icon={<Shield className="w-4 h-4" />}
-          />
-        )}
-
-        {/* Sponsor-specific navigation dropdown */}
-        {isSponsor && !isAdmin && (
-          <NavDropdown
-            label="Sponsor"
-            items={siteConfig.navItems.sponsor}
-            icon={<Heart className="w-4 h-4" />}
-          />
-        )}
-      </NavbarContent>
-
-      <NavbarContent justify="end">
         <NavbarItem>
           <ThemeSwitch className="scale-90" />
         </NavbarItem>
@@ -211,16 +196,30 @@ export const Navbar = () => {
                   <Link href="/settings">Settings</Link>
                 </DropdownItem>
 
-                {isSponsor && !isAdmin ? (
-                  <DropdownItem key="sponsor_dashboard" startContent={<Heart className="w-4 h-4" />}>
-                    <Link href="/sponsor-dashboard">Sponsor Dashboard</Link>
-                  </DropdownItem>
-                ) : null}
-
+                {/* Admin Dashboard in dropdown */}
                 {isAdmin ? (
                   <DropdownItem key="admin" startContent={<Shield className="w-4 h-4" />}>
                     <Link href="/admin">Admin Dashboard</Link>
                   </DropdownItem>
+                ) : null}
+
+                {/* Sponsor Dashboard in dropdown */}
+                {isSponsor && !isAdmin ? (
+                  <DropdownItem key="sponsor_dashboard" startContent={<Heart className="w-4 h-4" />}>
+                    <Link href="/sponsor">Sponsor Dashboard</Link>
+                  </DropdownItem>
+                ) : null}
+
+                {/* Sponsor application for regular members */}
+                {!isSponsor && !isAdmin ? (
+                  <>
+                    <DropdownItem key="become_sponsor" startContent={<Award className="w-4 h-4" />}>
+                      <Link href="/sponsor-application">Become a Sponsor</Link>
+                    </DropdownItem>
+                    <DropdownItem key="find_sponsor" startContent={<UserIcon className="w-4 h-4" />}>
+                      <Link href="/sponsor-matching">Find a Sponsor</Link>
+                    </DropdownItem>
+                  </>
                 ) : null}
 
                 <DropdownItem key="help" startContent={<HelpCircle className="w-4 h-4" />}>

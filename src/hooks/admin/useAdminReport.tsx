@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminService, ApiResponse } from '../../services/services';
+import { adminService } from '../../services/services';
+
 
 export function useAdminReport() {
     const queryClient = useQueryClient();
@@ -10,7 +11,7 @@ export function useAdminReport() {
 
     /**
      * Get all unresolved reports
-     * Route: /api/admin/reports/unresolved
+     * Route: /api/protected/admin/reports/unresolved
      */
     const getUnresolvedReports = () => ({
         queryKey: QUERY_KEYS.unresolvedReports,
@@ -18,14 +19,14 @@ export function useAdminReport() {
             const response = await adminService.getUnresolvedReports();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response: any) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
 
     /**
      * Handle a report
-     * Route: /api/admin/reports/handle
+     * Route: /api/protected/admin/reports/handle
      */
     const handleReportMutation = useMutation({
         mutationFn: async ({
@@ -37,11 +38,11 @@ export function useAdminReport() {
             actionTaken: string;
             resolved: boolean;
         }) => {
-            const response = await adminService.handleReport(
+            const response = await adminService.handleReport({
                 reportId,
                 actionTaken,
                 resolved
-            );
+            });
             return response.data;
         },
         onSuccess: () => {

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { resourceService, ApiResponse } from '../services/services';
+import { resourceService, } from '../services/services';
 
 export function useResource() {
     const queryClient = useQueryClient();
@@ -19,7 +19,7 @@ export function useResource() {
             const response = await resourceService.getResources();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response: any) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
@@ -33,7 +33,7 @@ export function useResource() {
             const response = await resourceService.getResource(resourceId);
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response: any) => response.data,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 

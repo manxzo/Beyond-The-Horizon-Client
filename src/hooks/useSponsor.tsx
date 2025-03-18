@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { sponsorService, ApiResponse } from '../services/services';
+import { sponsorService} from '../services/services';
 
 export function useSponsor() {
     const queryClient = useQueryClient();
@@ -15,11 +15,19 @@ export function useSponsor() {
     const getSponsorApplicationStatus = () => ({
         queryKey: QUERY_KEYS.sponsorApplicationStatus,
         queryFn: async () => {
-            const response = await sponsorService.checkSponsorApplicationStatus();
-            return response;
+            try {
+                const response = await sponsorService.checkSponsorApplicationStatus();
+                return response;
+            } catch (error: any) {
+                if (error.response?.status === 404) {
+                    return { success: true, data: null, message: "No application found" };
+                }
+                throw error;
+            }
         },
-        select: (response: ApiResponse<any>) => response.data,
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        select: (response:any) => response.data,
+        staleTime: 10 * 60 * 1000, // 10 minutes
+        cacheTime: 15 * 60 * 1000, // 15 minutes
     });
 
     /**

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminService, ApiResponse } from '../../services/services';
+import { adminService } from '../../services/services';
+import { ApplicationStatus } from '../../interfaces/enums';
 
 export function useAdminSponsor() {
     const queryClient = useQueryClient();
@@ -10,7 +11,7 @@ export function useAdminSponsor() {
 
     /**
      * Get all pending sponsor applications
-     * Route: /api/admin/sponsor-applications/pending
+     * Route: /api/protected/admin/sponsor-applications/pending
      */
     const getPendingSponsorApplications = () => ({
         queryKey: QUERY_KEYS.pendingSponsorApplications,
@@ -18,15 +19,13 @@ export function useAdminSponsor() {
             const response = await adminService.getPendingSponsorApplications();
             return response;
         },
-        select: (response: ApiResponse<any>) => response.data,
+        select: (response: any) => response.data,
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 
-
-
     /**
      * Review a sponsor application
-     * Route: /api/admin/sponsor-applications/review
+     * Route: /api/protected/admin/sponsor-applications/review
      */
     const reviewSponsorApplicationMutation = useMutation({
         mutationFn: async ({
@@ -35,19 +34,19 @@ export function useAdminSponsor() {
             adminComments,
         }: {
             applicationId: string;
-            status: string;
+            status: ApplicationStatus;
             adminComments?: string;
         }) => {
-            const response = await adminService.reviewSponsorApplication(
+            const response = await adminService.reviewSponsorApplication({
                 applicationId,
                 status,
-                adminComments
-            );
+                adminComments,
+            });
             return response.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
-                queryKey: QUERY_KEYS.pendingSponsorApplications
+                queryKey: QUERY_KEYS.pendingSponsorApplications,
             });
         },
     });

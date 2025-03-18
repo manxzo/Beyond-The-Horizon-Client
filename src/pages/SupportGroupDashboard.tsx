@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -22,6 +22,8 @@ import {
     Textarea,
     useDisclosure,
     DateInput,
+    Select,
+    SelectItem,
 } from "@heroui/react";
 import {
     Users,
@@ -32,6 +34,11 @@ import {
     CalendarPlus,
     LogOut,
     AlertTriangle,
+    Plus,
+    FileText,
+    Video,
+    Headphones,
+    ExternalLink,
 } from "lucide-react";
 import { getLocalTimeZone, now, ZonedDateTime } from "@internationalized/date";
 
@@ -40,9 +47,8 @@ import { useSupportGroup } from "../hooks/useSupportGroup";
 import { useMeeting } from "../hooks/useMeeting";
 import { useUser } from "../hooks/useUser";
 import MemberCard from "../components/MemberCard";
-
-// Define meeting status types
-type MeetingStatus = 'upcoming' | 'ongoing' | 'ended';
+import { MeetingStatus } from "../interfaces/enums";
+import { useResource } from "../hooks/useResource";
 
 // Define meeting interface
 interface GroupMeeting {
@@ -54,6 +60,7 @@ interface GroupMeeting {
     description: string | null;
     scheduled_time: string;
     status: MeetingStatus;
+    meeting_chat_id: string | null;
     participant_count?: number;
     is_participant?: boolean;
 }
@@ -68,6 +75,9 @@ export default function SupportGroupDashboard() {
         support_group_id: groupId || "",
     });
     const [meetingDate, setMeetingDate] = useState<ZonedDateTime | null>(now(getLocalTimeZone()));
+    const [processedGroupDetails, setProcessedGroupDetails] = useState<any>(null);
+    const [joiningMeetingId, setJoiningMeetingId] = useState<string | null>(null);
+    const [leavingMeetingId, setLeavingMeetingId] = useState<string | null>(null);
 
     // Get support group hooks
     const { getSupportGroupDetails, leaveSupportGroup } = useSupportGroup();
@@ -75,31 +85,59 @@ export default function SupportGroupDashboard() {
     // Get meeting hooks
     const {
         createMeeting,
-        isCreatingMeeting
+        isCreatingMeeting,
+        joinMeeting,
+        isJoiningMeeting,
+        leaveMeeting,
+        isLeavingMeeting
     } = useMeeting();
 
     // Get user hooks
     const { currentUser } = useUser();
+
     // Fetch support group details
     const {
         data: groupDetailsResponse,
         isLoading: isLoadingGroupDetails,
         error: groupDetailsError,
+        refetch: refetchGroupDetails
     } = useQuery({
         ...getSupportGroupDetails(groupId || ""),
         enabled: !!groupId,
     });
 
-    const groupDetails = groupDetailsResponse;
+    // Process the group details to ensure consistent casing and structure
+    useEffect(() => {
+        if (groupDetailsResponse) {
+            // Create a deep copy of the response to avoid mutation issues
+            const processedData = JSON.parse(JSON.stringify(groupDetailsResponse));
+
+            // Process meetings to ensure status is properly capitalized
+            if (processedData.meetings && Array.isArray(processedData.meetings)) {
+                processedData.meetings = processedData.meetings.map((meeting: any) => {
+                    // Ensure status is properly capitalized
+                    if (meeting.status) {
+                        meeting.status = meeting.status.charAt(0).toUpperCase() + meeting.status.slice(1).toLowerCase();
+                    }
+                    return meeting;
+                });
+            }
+
+            setProcessedGroupDetails(processedData);
+        }
+    }, [groupDetailsResponse]);
+
+    // Use the processed group details instead of the raw response
+    const groupDetails = processedGroupDetails;
 
     // Extract the actual meetings data
     const meetings = groupDetails?.meetings;
     const members = groupDetails?.members;
     const isMember = members?.some((member: any) => member.user_id === currentUser?.user_id);
+
     // Handle creating a new meeting
     const handleCreateMeeting = () => {
         if (groupId) {
-
             const formattedDate = meetingDate ? meetingDate.toString() : "";
 
             createMeeting({
@@ -118,6 +156,30 @@ export default function SupportGroupDashboard() {
             });
             setMeetingDate(now(getLocalTimeZone()));
         }
+    };
+
+    // Handle joining a meeting
+    const handleJoinMeeting = (meetingId: string) => {
+        setJoiningMeetingId(meetingId);
+        joinMeeting(meetingId);
+
+        // Refetch group details after a short delay to update the UI
+        setTimeout(() => {
+            refetchGroupDetails();
+            setJoiningMeetingId(null);
+        }, 1000);
+    };
+
+    // Handle leaving a meeting
+    const handleLeaveMeeting = (meetingId: string) => {
+        setLeavingMeetingId(meetingId);
+        leaveMeeting(meetingId);
+
+        // Refetch group details after a short delay to update the UI
+        setTimeout(() => {
+            refetchGroupDetails();
+            setLeavingMeetingId(null);
+        }, 1000);
     };
 
     // Handle leaving the support group
@@ -139,27 +201,31 @@ export default function SupportGroupDashboard() {
     };
 
     // Sort meetings by status and date
-    const sortedMeetings = meetings?.sort((a: GroupMeeting, b: GroupMeeting) => {
-        // First by status priority (ongoing > upcoming > ended)
-        const statusPriority = { ongoing: 0, upcoming: 1, ended: 2 };
-        const statusDiff = statusPriority[a.status] - statusPriority[b.status];
+    const sortedMeetings = [...(groupDetails?.meetings || [])].sort((a, b) => {
+        // First sort by status with explicit typing
+        const statusPriority: Record<MeetingStatus, number> = {
+            [MeetingStatus.Ongoing]: 0,
+            [MeetingStatus.Upcoming]: 1,
+            [MeetingStatus.Ended]: 2
+        };
+        const statusDiff = statusPriority[a.status as MeetingStatus] - statusPriority[b.status as MeetingStatus];
         if (statusDiff !== 0) return statusDiff;
 
         // Then by date (upcoming: soonest first, ended: most recent first)
         const dateA = new Date(a.scheduled_time);
         const dateB = new Date(b.scheduled_time);
 
-        if (a.status === 'upcoming') {
+        if (a.status === MeetingStatus.Upcoming) {
             return dateA.getTime() - dateB.getTime(); // Soonest first
         } else {
             return dateB.getTime() - dateA.getTime(); // Most recent first
         }
-    });
+    }) || [];
 
     // Filter meetings by status
-    const upcomingMeetings = sortedMeetings?.filter((meeting: GroupMeeting) => meeting.status === 'upcoming');
-    const ongoingMeetings = sortedMeetings?.filter((meeting: GroupMeeting) => meeting.status === 'ongoing');
-    const pastMeetings = sortedMeetings?.filter((meeting: GroupMeeting) => meeting.status === 'ended');
+    const upcomingMeetings = sortedMeetings.filter((meeting: GroupMeeting) => meeting.status === MeetingStatus.Upcoming);
+    const ongoingMeetings = sortedMeetings.filter((meeting: GroupMeeting) => meeting.status === MeetingStatus.Ongoing);
+    const pastMeetings = sortedMeetings.filter((meeting: GroupMeeting) => meeting.status === MeetingStatus.Ended);
 
     // Format date for display
     const formatDate = (dateString: string) => {
@@ -175,10 +241,11 @@ export default function SupportGroupDashboard() {
     };
 
     // Check if user is admin or sponsor
-    const isAdminOrSponsor = groupDetails?.group?.admin_id === currentUser?.user_id ||
+    const isAdminOrSponsor =
+        currentUser?.user_id === groupDetails?.group?.admin_id ||
         groupDetails?.sponsors?.some((sponsor: any) => sponsor.user_id === currentUser?.user_id);
 
-    if (isLoadingGroupDetails) {
+    if (isLoadingGroupDetails || !processedGroupDetails) {
         return (
             <DefaultLayout>
                 <div className="flex justify-center items-center h-[70vh]">
@@ -294,6 +361,11 @@ export default function SupportGroupDashboard() {
                                                         <p className="text-small text-default-500">
                                                             Started {formatDate(meeting.scheduled_time)}
                                                         </p>
+                                                        {meeting.participant_count !== undefined && (
+                                                            <p className="text-tiny text-default-400 mt-1">
+                                                                {meeting.participant_count} {meeting.participant_count === 1 ? 'participant' : 'participants'}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                     <Chip color="success" variant="flat">Live</Chip>
                                                 </CardHeader>
@@ -302,13 +374,36 @@ export default function SupportGroupDashboard() {
                                                     <p>{meeting.description || "No description provided."}</p>
                                                 </CardBody>
                                                 <Divider />
-                                                <CardFooter>
+                                                <CardFooter className="flex flex-col gap-2">
+                                                    <div className="flex gap-2 w-full">
+                                                        {meeting.is_participant ? (
+                                                            <Button
+                                                                color="danger"
+                                                                variant="flat"
+                                                                fullWidth
+                                                                onPress={() => handleLeaveMeeting(meeting.meeting_id)}
+                                                                isLoading={isLeavingMeeting && leavingMeetingId === meeting.meeting_id}
+                                                            >
+                                                                Leave Meeting
+                                                            </Button>
+                                                        ) : (
+                                                            <Button
+                                                                color="primary"
+                                                                fullWidth
+                                                                onPress={() => handleJoinMeeting(meeting.meeting_id)}
+                                                                isLoading={isJoiningMeeting && joiningMeetingId === meeting.meeting_id}
+                                                            >
+                                                                Join Meeting
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                     <Button
-                                                        color="success"
+                                                        color={meeting.is_participant ? "success" : "default"}
+                                                        variant={meeting.is_participant ? "solid" : "flat"}
                                                         fullWidth
                                                         onPress={() => handleViewMeeting(meeting.meeting_id)}
                                                     >
-                                                        Join Now
+                                                        {meeting.is_participant ? "Enter Meeting" : "View Details"}
                                                     </Button>
                                                 </CardFooter>
                                             </Card>
@@ -332,6 +427,11 @@ export default function SupportGroupDashboard() {
                                                         <p className="text-small text-default-500">
                                                             Scheduled for {formatDate(meeting.scheduled_time)}
                                                         </p>
+                                                        {meeting.participant_count !== undefined && (
+                                                            <p className="text-tiny text-default-400 mt-1">
+                                                                {meeting.participant_count} {meeting.participant_count === 1 ? 'participant' : 'participants'}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                     <Chip color="primary" variant="flat">Upcoming</Chip>
                                                 </CardHeader>
@@ -340,9 +440,30 @@ export default function SupportGroupDashboard() {
                                                     <p>{meeting.description || "No description provided."}</p>
                                                 </CardBody>
                                                 <Divider />
-                                                <CardFooter>
+                                                <CardFooter className="flex flex-col gap-2">
+                                                    <div className="flex gap-2 w-full">
+                                                        {meeting.is_participant ? (
+                                                            <Button
+                                                                color="danger"
+                                                                variant="flat"
+                                                                fullWidth
+                                                                onPress={() => handleLeaveMeeting(meeting.meeting_id)}
+                                                                isLoading={isLeavingMeeting && leavingMeetingId === meeting.meeting_id}
+                                                            >
+                                                                Leave Meeting
+                                                            </Button>
+                                                        ) : (
+                                                            <Button
+                                                                color="primary"
+                                                                fullWidth
+                                                                onPress={() => handleJoinMeeting(meeting.meeting_id)}
+                                                                isLoading={isJoiningMeeting && joiningMeetingId === meeting.meeting_id}
+                                                            >
+                                                                Join Meeting
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                     <Button
-                                                        color="primary"
                                                         variant="flat"
                                                         fullWidth
                                                         onPress={() => handleViewMeeting(meeting.meeting_id)}
@@ -368,6 +489,11 @@ export default function SupportGroupDashboard() {
                                                         <p className="text-small text-default-500">
                                                             Held on {formatDate(meeting.scheduled_time)}
                                                         </p>
+                                                        {meeting.participant_count !== undefined && (
+                                                            <p className="text-tiny text-default-400 mt-1">
+                                                                {meeting.participant_count} {meeting.participant_count === 1 ? 'participant' : 'participants'}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                     <Chip variant="flat">Ended</Chip>
                                                 </CardHeader>
@@ -500,13 +626,7 @@ export default function SupportGroupDashboard() {
                             <span>Resources</span>
                         </div>
                     }>
-                        <div className="mt-4 flex flex-col items-center justify-center py-12">
-                            <BookOpen size={48} className="text-default-400 mb-4" />
-                            <p className="text-xl font-medium mb-2">Resources Coming Soon</p>
-                            <p className="text-default-500">
-                                This feature is under development. Check back later for resources related to this group.
-                            </p>
-                        </div>
+                        <ResourcesTab groupId={groupId || ""} isAdmin={isAdminOrSponsor} />
                     </Tab>
                 </Tabs>
             </div>
@@ -555,5 +675,324 @@ export default function SupportGroupDashboard() {
                 </ModalContent>
             </Modal>
         </DefaultLayout>
+    );
+}
+
+// Resources Tab Component
+function ResourcesTab({ groupId, isAdmin }: { groupId: string, isAdmin: boolean }) {
+    const [isCreatingResource, setIsCreatingResource] = useState(false);
+    const [newResource, setNewResource] = useState({
+        title: "",
+        content: "",
+        type: "article",
+        category: "mental_health",
+        url: "",
+        description: ""
+    });
+    const { isOpen, onOpen, onClose } = useDisclosure();
+    const { getResources, createResource } = useResource();
+
+    // Resource types and categories
+    const RESOURCE_TYPES = [
+        { value: "article", label: "Article" },
+        { value: "video", label: "Video" },
+        { value: "podcast", label: "Podcast" },
+        { value: "book", label: "Book" },
+        { value: "document", label: "Document" },
+        { value: "other", label: "Other" }
+    ];
+
+    const RESOURCE_CATEGORIES = [
+        { value: "mental_health", label: "Mental Health" },
+        { value: "addiction_recovery", label: "Addiction Recovery" },
+        { value: "personal_development", label: "Personal Development" },
+        { value: "relationships", label: "Relationships" },
+        { value: "grief_loss", label: "Grief & Loss" },
+        { value: "health_wellness", label: "Health & Wellness" },
+        { value: "other", label: "Other" }
+    ];
+
+    // Fetch resources
+    const { data: resourcesData, isLoading, error, refetch } = useQuery({
+        ...getResources(),
+        select: (data: any) => {
+            // Add debugging
+            console.log("Resource API response:", data);
+
+            // Filter resources for this support group
+            if (!data) return [];
+
+            // Handle different response structures
+            let resourcesList = data.data || data;
+
+            // If we got a single resource object (not in an array)
+            if (resourcesList && !Array.isArray(resourcesList) && resourcesList.resource_id) {
+                console.log("Single resource detected, converting to array:", resourcesList);
+                resourcesList = [resourcesList];
+            }
+
+            // Ensure we're working with an array before filtering
+            if (!Array.isArray(resourcesList)) {
+                console.log("Resource list is not an array:", resourcesList);
+                return [];
+            }
+
+            const filteredResources = resourcesList.filter((resource: any) =>
+                resource.support_group_id === groupId || resource.support_group_id === null
+            );
+            console.log("Filtered resources:", filteredResources);
+            return filteredResources;
+        }
+    });
+
+    const handleCreateResource = async () => {
+        setIsCreatingResource(true);
+        try {
+            // Format content as JSON with structured data
+            const contentObj = {
+                type: newResource.type,
+                category: newResource.category,
+                url: newResource.url,
+                description: newResource.description
+            };
+
+            // Create resource with formatted content
+            await createResource({
+                title: newResource.title,
+                content: JSON.stringify(contentObj),
+                support_group_id: groupId
+            });
+
+            // Reset form and close modal
+            setNewResource({
+                title: "",
+                content: "",
+                type: "article",
+                category: "mental_health",
+                url: "",
+                description: ""
+            });
+            onClose();
+            refetch();
+        } catch (error) {
+            console.error("Error creating resource:", error);
+        } finally {
+            setIsCreatingResource(false);
+        }
+    };
+
+    // Parse content from JSON string to object
+    const parseResourceContent = (contentStr: string) => {
+        try {
+            return JSON.parse(contentStr);
+        } catch (e) {
+            // If parsing fails, return the original string as description
+            return { description: contentStr };
+        }
+    };
+
+    // Get resource type icon
+    const getResourceTypeIcon = (type: string) => {
+        switch (type) {
+            case 'article':
+                return <FileText size={18} />;
+            case 'video':
+                return <Video size={18} />;
+            case 'podcast':
+                return <Headphones size={18} />;
+            case 'book':
+                return <BookOpen size={18} />;
+            default:
+                return <FileText size={18} />;
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="mt-4 flex justify-center py-8">
+                <Spinner color="primary" />
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="mt-4 flex flex-col items-center justify-center py-8">
+                <AlertTriangle size={40} className="text-danger mb-4" />
+                <p className="text-danger">Failed to load resources</p>
+            </div>
+        );
+    }
+
+    // Ensure we have an array of resources
+    const resources = resourcesData || [];
+
+    return (
+        <div className="mt-4">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold">Group Resources</h3>
+                {isAdmin && (
+                    <Button
+                        color="primary"
+                        variant="flat"
+                        startContent={<Plus size={16} />}
+                        onPress={onOpen}
+                    >
+                        Add Resource
+                    </Button>
+                )}
+            </div>
+
+            {resources.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {resources.map((resource: any) => {
+                        const content = parseResourceContent(resource.content);
+                        return (
+                            <Card key={resource.resource_id} className="border border-default-200">
+                                <CardHeader className="flex justify-between items-start">
+                                    <div className="flex-grow">
+                                        <h4 className="text-lg font-semibold">{resource.title}</h4>
+                                        <p className="text-small text-default-500">
+                                            Added {new Date(resource.created_at).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                    {content.category && (
+                                        <Chip color="primary" variant="flat" size="sm">
+                                            {content.category.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                                        </Chip>
+                                    )}
+                                </CardHeader>
+                                <Divider />
+                                <CardBody>
+                                    <div className="flex gap-2 items-center mb-2">
+                                        {content.type && (
+                                            <Chip
+                                                variant="flat"
+                                                size="sm"
+                                                startContent={getResourceTypeIcon(content.type)}
+                                            >
+                                                {content.type.charAt(0).toUpperCase() + content.type.slice(1)}
+                                            </Chip>
+                                        )}
+                                    </div>
+                                    <p className="whitespace-pre-line">{content.description}</p>
+                                </CardBody>
+                                {content.url && (
+                                    <>
+                                        <Divider />
+                                        <CardFooter>
+                                            <Button
+                                                as="a"
+                                                href={content.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                color="primary"
+                                                variant="flat"
+                                                size="sm"
+                                                startContent={<ExternalLink size={16} />}
+                                            >
+                                                View Resource
+                                            </Button>
+                                        </CardFooter>
+                                    </>
+                                )}
+                            </Card>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center py-12 bg-default-50 rounded-lg">
+                    <BookOpen size={48} className="text-default-400 mb-4" />
+                    <p className="text-xl font-medium mb-2">No Resources Yet</p>
+                    <p className="text-default-500 text-center max-w-md mb-6">
+                        {isAdmin
+                            ? "Add helpful resources for your group members."
+                            : "Check back later for resources related to this group."}
+                    </p>
+                    {isAdmin && (
+                        <Button
+                            color="primary"
+                            startContent={<Plus size={16} />}
+                            onPress={onOpen}
+                        >
+                            Add First Resource
+                        </Button>
+                    )}
+                </div>
+            )}
+
+            {/* Add Resource Modal */}
+            <Modal isOpen={isOpen} onClose={onClose} size="lg">
+                <ModalContent>
+                    <ModalHeader>Add New Resource</ModalHeader>
+                    <ModalBody>
+                        <Input
+                            label="Title"
+                            placeholder="Enter resource title"
+                            value={newResource.title}
+                            onChange={(e) => setNewResource({ ...newResource, title: e.target.value })}
+                            isRequired
+                        />
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 my-2">
+                            <Select
+                                label="Resource Type"
+                                value={newResource.type}
+                                onChange={(e) => setNewResource({ ...newResource, type: e.target.value })}
+                                isRequired
+                            >
+                                {RESOURCE_TYPES.map(type => (
+                                    <SelectItem key={type.value}>
+                                        {type.label}
+                                    </SelectItem>
+                                ))}
+                            </Select>
+
+                            <Select
+                                label="Category"
+                                value={newResource.category}
+                                onChange={(e) => setNewResource({ ...newResource, category: e.target.value })}
+                                isRequired
+                            >
+                                {RESOURCE_CATEGORIES.map(category => (
+                                    <SelectItem key={category.value}>
+                                        {category.label}
+                                    </SelectItem>
+                                ))}
+                            </Select>
+                        </div>
+
+                        <Input
+                            label="URL (Optional)"
+                            placeholder="Enter resource URL"
+                            value={newResource.url}
+                            onChange={(e) => setNewResource({ ...newResource, url: e.target.value })}
+                        />
+
+                        <Textarea
+                            label="Description"
+                            placeholder="Enter resource description"
+                            value={newResource.description}
+                            onChange={(e) => setNewResource({ ...newResource, description: e.target.value })}
+                            isRequired
+                            minRows={3}
+                        />
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="flat" onPress={onClose}>
+                            Cancel
+                        </Button>
+                        <Button
+                            color="primary"
+                            onPress={handleCreateResource}
+                            isLoading={isCreatingResource}
+                            isDisabled={!newResource.title || !newResource.description}
+                        >
+                            Add Resource
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+        </div>
     );
 } 
