@@ -36,7 +36,8 @@ export default function ConversationPreview({ username, onClick }: ConversationP
     // Update last message and unread status when messages change
     useEffect(() => {
         if (messages.length > 0) {
-            const mostRecentMessage = messages[messages.length - 1];
+            const filtered = messages.filter((message:any)=>!message.deleted);
+            const mostRecentMessage = filtered[filtered.length - 1];
             setLastMessage(mostRecentMessage.content || "");
             setLastMessageTime(mostRecentMessage.timestamp || "");
 
