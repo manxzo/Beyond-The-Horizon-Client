@@ -37,6 +37,7 @@ export default function ConversationPreview({ username, onClick }: ConversationP
     useEffect(() => {
         if (messages.length > 0) {
             const filtered = messages.filter((message:any)=>!message.deleted);
+            if (filtered.length >0){
             const mostRecentMessage = filtered[filtered.length - 1];
             setLastMessage(mostRecentMessage.content || "");
             setLastMessageTime(mostRecentMessage.timestamp || "");
@@ -49,7 +50,7 @@ export default function ConversationPreview({ username, onClick }: ConversationP
             );
 
             setHasUnread(hasUnreadMessages);
-        }
+        }}
     }, [messages, currentUser?.user_id]);
 
     // Format the last message time
