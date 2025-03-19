@@ -1,5 +1,17 @@
 # Beyond The Horizon - Client
 
+![icon](/icon.png)
+
+### Live Page URL [Beyond The Horizon](beyondthehorizon.my)
+
+### Link to Server Repository [Beyond-The-Horizon-Server](https://github.com/manxzo/Beyond-The-Horizon-Server)
+
+### Live Server Shuttle URL [Beyond The Horizon Server](https://bth-server-ywjx.shuttle.app/)
+
+### Planning Materials [Project Planning](https://trello.com/b/TzRrOQ94/project-4-bth)
+
+---
+
 ## Overview
 
 The client-side of Beyond The Horizon represents my strategic approach to full-stack development while primarily focusing on learning Rust for the backend. As I dedicated significant time to mastering Rust's concepts and implementing a robust server, I made a conscious decision to leverage AI assistance for certain aspects of the frontend development, particularly in areas that were template-driven or repetitive.
@@ -198,61 +210,31 @@ This approach allowed me to:
 
 ## Dependencies
 
-```json
-{
-  "dependencies": {
-    "@heroui/react": "^2.7.5",
-    "@heroui/system": "2.4.12",
-    "@heroui/theme": "2.4.12",
-    "@heroui/use-theme": "2.1.6",
-    "@react-aria/visually-hidden": "3.8.20",
-    "@react-types/shared": "3.28.0",
-    "@tanstack/react-query": "^5.67.3",
-    "@types/crypto-js": "^4.2.2",
-    "axios": "^1.8.3",
-    "clsx": "2.1.1",
-    "crypto-js": "^4.2.0",
-    "date-fns": "^4.1.0",
-    "framer-motion": "11.15.0",
-    "jwt-decode": "^4.0.0",
-    "lucide-react": "^0.482.0",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "react-router-dom": "6.23.0",
-    "recharts": "^2.15.1",
-    "tailwind-variants": "0.3.0",
-    "tailwindcss": "3.4.16"
-  },
-  "devDependencies": {
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^14.2.1",
-    "@types/node": "20.5.7",
-    "@types/react": "18.3.3",
-    "@types/react-dom": "18.3.0",
-    "@typescript-eslint/eslint-plugin": "8.11.0",
-    "@typescript-eslint/parser": "8.11.0",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "10.4.19",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "9.1.0",
-    "eslint-plugin-import": "^2.26.0",
-    "eslint-plugin-jsx-a11y": "^6.4.1",
-    "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-prettier": "5.2.1",
-    "eslint-plugin-react": "^7.23.2",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-unused-imports": "4.1.4",
-    "glob": "^11.0.1",
-    "jsdom": "^26.0.0",
-    "postcss": "8.4.38",
-    "prettier": "3.3.3",
-    "typescript": "5.6.3",
-    "vite": "^5.2.0",
-    "vite-tsconfig-paths": "^4.3.2",
-    "vitest": "^3.0.8"
-  }
-}
-```
+## Performance Optimizations
+
+- [Development Setup](#development-setup)
+- [Dependencies](#dependencies)
+- [Contributing](#contributing)
+
+---
+
+## Attributions
+
+### External Libraries and Frameworks
+
+- HeroUI (v2.7.5) - UI Component Library - [https://heroui.com](https://heroui.com)
+- TanStack Query (v5.67.3) - Data Fetching Library - [https://tanstack.com/query](https://tanstack.com/query)
+- Framer Motion (v11.15.0) - Animation Library - [https://www.framer.com/motion/](https://www.framer.com/motion/)
+
+### AI Assistance
+
+- OpenAI. (2024). ChatGPT (GPT-4) [Large language model]. Used for code generation and debugging assistance. https://chat.openai.com
+- Anthropic. (2024). Claude [Large language model]. Used for architecture planning and code review. https://anthropic.com/claude
+
+### Assets
+
+- Icons provided by Lucide React (v0.482.0) - [https://lucide.dev](https://lucide.dev)
+- Charts implemented using Recharts (v2.15.1) - [https://recharts.org](https://recharts.org)
 
 ---
 
@@ -316,10 +298,7 @@ Most code logic was written and understood by me, with AI serving as a tool to w
 - [State Management](#state-management)
 - [Real-time Features](#real-time-features)
 - [Security & Privacy](#security--privacy)
-- [Performance Optimizations](#performance-optimizations)
-- [Development Setup](#development-setup)
-- [Dependencies](#dependencies)
-- [Contributing](#contributing)
+- [Stretch Goals](#stretch-goals)
 
 ---
 
@@ -516,3 +495,36 @@ export const SponsorDashboard: React.FC = () => {
 - Password security
 
 ---
+
+## Stretch Goals
+
+### Enhanced User Experience
+
+- Develop a mobile app version using React Native
+- Add voice and video chat capabilities for meetings
+
+### Advanced Features
+
+- Implement AI-powered content moderation
+- Add group analytics dashboard for sponsors
+- Develop an anonymous posting feature
+- Create a resource recommendation system
+
+### Technical Improvements
+
+- Implement server-side rendering (SSR) for better performance
+- Add end-to-end encryption for private messages
+- Implement WebRTC for peer-to-peer communication
+
+### Community Features
+
+- Create a badge and achievement system
+- Implement a mentorship matching algorithm
+- Add group event planning tools
+- Develop a resource marketplace
+
+### Integration & Expansion
+
+- Add social media integration
+- Implement calendar sync with popular providers
+- Create an API for third-party integrations
