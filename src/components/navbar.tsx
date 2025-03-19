@@ -59,12 +59,11 @@ export const Navbar = () => {
       <NavbarContent className="gap-4" justify="start">
         <NavbarBrand>
           <Link
-            className="flex justify-start items-center gap-1"
+            className="flex-auto"
             color="foreground"
             href="/"
           >
-            <BthIcon size={48} />
-            <p className="font-bold text-inherit">{siteConfig.name}</p>
+            <BthIcon size={256} />
           </Link>
         </NavbarBrand>
 
